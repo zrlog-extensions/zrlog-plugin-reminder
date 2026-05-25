@@ -211,7 +211,7 @@
                             <workingDirectory>src/main/frontend</workingDirectory>
                             <installDirectory>target</installDirectory>
                             <nodeDownloadRoot>https://npmmirror.com/mirrors/node/</nodeDownloadRoot>
-                            <yarnDownloadRoot>https://dl.zrlog.com/yarnpkg/yarn/releases/download/</yarnDownloadRoot>
+                            <yarnDownloadRoot>https://github.com/yarnpkg/yarn/releases/download/</yarnDownloadRoot>
                             <npmRegistryURL>https://registry.npmmirror.com</npmRegistryURL>
                         </configuration>
                     </plugin>
