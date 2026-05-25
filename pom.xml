@@ -143,8 +143,7 @@
                             <fallback>false</fallback>
                             <buildArgs>
                                 <arg>
-                                    -Ob
-                                    --enable-sbom
+                                    -Os
                                     -H:+BuildReport
                                     -H:+UnlockExperimentalVMOptions
                                     --allow-incomplete-classpath
