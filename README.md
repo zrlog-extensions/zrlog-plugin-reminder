@@ -18,3 +18,5 @@ mvn -q -PnodeBuild -DskipTests package
 ```
 
 前端构建产物会在 `nodeBuild` 流程中生成到 `src/main/resources/templates`，该目录不提交到版本库。打包产物为 `target/reminder.jar`。
+
+Native 构建会先执行 `-PnodeBuild` 生成前端资源，再通过 `exec:exec@java-agent` 注入 GraalVM agent 配置。
