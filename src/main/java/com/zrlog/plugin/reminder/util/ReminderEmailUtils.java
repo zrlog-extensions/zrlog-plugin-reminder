@@ -1,21 +1,19 @@
 package com.zrlog.plugin.reminder.util;
 
-import com.google.gson.Gson;
 import com.zrlog.plugin.IOSession;
 import com.zrlog.plugin.data.codec.MsgPacket;
 import com.zrlog.plugin.data.codec.MsgPacketStatus;
+import com.zrlog.plugin.reminder.model.ReminderEmailResponse;
 import com.zrlog.plugin.reminder.model.ReminderTask;
 
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 
 public class ReminderEmailUtils {
 
     private static final int SUCCESS_STATUS = 200;
     private static final Duration EMAIL_SERVICE_TIMEOUT = Duration.ofSeconds(60);
-    private static final Gson GSON = new Gson();
 
     public static void sendReminder(IOSession session, ReminderTask task) {
         Map<String, String> map = new HashMap<>();
@@ -29,23 +27,9 @@ public class ReminderEmailUtils {
         if (response.getStatus() != MsgPacketStatus.RESPONSE_SUCCESS) {
             throw new IllegalStateException("emailService response error " + response.getStatus());
         }
-        Map responseMap = GSON.fromJson(response.getDataStr(), Map.class);
-        if (!Objects.equals(statusValue(responseMap.get("status")), SUCCESS_STATUS)) {
-            throw new IllegalStateException("emailService send failed, status " + responseMap.get("status"));
-        }
-    }
-
-    private static Integer statusValue(Object value) {
-        if (value instanceof Number) {
-            return ((Number) value).intValue();
-        }
-        if (value == null) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(String.valueOf(value));
-        } catch (NumberFormatException e) {
-            return null;
+        ReminderEmailResponse emailResponse = response.convertToClass(ReminderEmailResponse.class);
+        if (emailResponse.getStatus() != SUCCESS_STATUS) {
+            throw new IllegalStateException("emailService send failed, status " + emailResponse.getStatus());
         }
     }
 
