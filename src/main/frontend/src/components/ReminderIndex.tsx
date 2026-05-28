@@ -14,6 +14,8 @@ import {
 } from "antd";
 import axios from "axios";
 import {FunctionComponent, useMemo, useState} from "react";
+import styled, {createGlobalStyle} from "styled-components";
+import {theme} from "antd";
 import {ReminderInfoResponse, ReminderPriority, ReminderTask, StandardResponse} from "../index";
 
 type FilterType = "open" | "today" | "overdue" | "done";
@@ -117,14 +119,178 @@ const statusTag = (task: ReminderTask) => {
     return <Tag>待办</Tag>;
 }
 
-const SummaryCard: FunctionComponent<{ label: string; value: number }> = ({label, value}) => (
-    <div className="summary-card">
-        <div className="summary-label">{label}</div>
-        <div className="summary-value">{value}</div>
-    </div>
+// CSS-in-JS Styled Components
+const GlobalStyle = createGlobalStyle<{ $token: any }>`
+  body {
+    margin: 0;
+    background-color: ${props => props.$token.colorBgLayout};
+    color: ${props => props.$token.colorText};
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+  }
+`;
+
+const Shell = styled.div`
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px;
+  box-sizing: border-box;
+`;
+
+const TopBar = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+
+  @media (max-width: 720px) {
+    display: block;
+    
+    .ant-space {
+      margin-top: 12px;
+    }
+  }
+`;
+
+const Title = styled.h1`
+  margin: 0;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 650;
+`;
+
+const SubTitle = styled.div<{ $token: any }>`
+  margin-top: 6px;
+  color: ${props => props.$token.colorTextDescription};
+  font-size: 14px;
+`;
+
+const SummaryGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+
+  @media (max-width: 720px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`;
+
+const SummaryCardContainer = styled.div<{ $token: any }>`
+  padding: 16px;
+  border: 1px solid ${props => props.$token.colorBorderSecondary};
+  border-radius: 8px;
+  background: ${props => props.$token.colorBgContainer};
+`;
+
+const SummaryLabel = styled.div<{ $token: any }>`
+  color: ${props => props.$token.colorTextDescription};
+  font-size: 13px;
+`;
+
+const SummaryValue = styled.div`
+  margin-top: 6px;
+  font-size: 28px;
+  line-height: 32px;
+  font-weight: 700;
+`;
+
+const FilterRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 14px;
+
+  @media (max-width: 720px) {
+    display: block;
+  }
+`;
+
+const TaskListContainer = styled.div<{ $token: any }>`
+  border: 1px solid ${props => props.$token.colorBorderSecondary};
+  border-radius: 8px;
+  background: ${props => props.$token.colorBgContainer};
+  overflow: hidden;
+`;
+
+const TaskItemContainer = styled.div<{ $token: any }>`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  padding: 16px;
+  border-bottom: 1px solid ${props => props.$token.colorBorderSecondary};
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const TaskMain = styled.div`
+  min-width: 0;
+`;
+
+const TaskHead = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+`;
+
+const TaskTitle = styled.div<{ $done?: boolean; $token: any }>`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 600;
+  color: ${props => props.$done ? props.$token.colorTextDisabled : props.$token.colorText};
+  text-decoration: ${props => props.$done ? 'line-through' : 'none'};
+`;
+
+const TaskMeta = styled.div<{ $token: any }>`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+  color: ${props => props.$token.colorTextDescription};
+  font-size: 13px;
+`;
+
+const TaskNote = styled.div<{ $token: any }>`
+  margin-top: 8px;
+  color: ${props => props.$token.colorTextDescription};
+  white-space: pre-wrap;
+`;
+
+const TaskActions = styled(Space)`
+  align-items: center;
+
+  @media (max-width: 720px) {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+`;
+
+const EmptyText = styled.div<{ $token: any }>`
+  padding: 42px 16px;
+  text-align: center;
+  color: ${props => props.$token.colorTextDisabled};
+`;
+
+const SummaryCard: FunctionComponent<{ label: string; value: number; token: any }> = ({label, value, token}) => (
+    <SummaryCardContainer $token={token}>
+        <SummaryLabel $token={token}>{label}</SummaryLabel>
+        <SummaryValue>{value}</SummaryValue>
+    </SummaryCardContainer>
 );
 
 const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
+    const {token} = theme.useToken();
     const [tasks, setTasks] = useState<ReminderTask[]>(data.tasks || []);
     const [filter, setFilter] = useState<FilterType>("open");
     const [loading, setLoading] = useState(false);
@@ -230,58 +396,59 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
     }
 
     return (
-        <div className="reminder-shell">
+        <Shell>
+            <GlobalStyle $token={token} />
             {contextHolder}
-            <div className="reminder-topbar">
+            <TopBar>
                 <div>
-                    <h1 className="reminder-title">待办提醒</h1>
-                    <div className="reminder-subtitle">记录待办、标记进度，到期后通过 ZrLog 邮件服务发送提醒</div>
+                    <Title>待办提醒</Title>
+                    <SubTitle $token={token}>记录待办、标记进度，到期后通过 ZrLog 邮件服务发送提醒</SubTitle>
                 </div>
                 <Space wrap>
                     <Button onClick={load} loading={loading}>刷新</Button>
                     <Button onClick={remindNow}>立即检查提醒</Button>
                     <Button type="primary" onClick={() => openModal()}>新建待办</Button>
                 </Space>
-            </div>
+            </TopBar>
 
-            <div className="summary-grid">
-                <SummaryCard label="待处理" value={openTasks.length}/>
-                <SummaryCard label="今天" value={todayTasks.length}/>
-                <SummaryCard label="已逾期" value={overdueTasks.length}/>
-                <SummaryCard label="已完成" value={doneTasks.length}/>
-            </div>
+            <SummaryGrid>
+                <SummaryCard label="待处理" value={openTasks.length} token={token}/>
+                <SummaryCard label="今天" value={todayTasks.length} token={token}/>
+                <SummaryCard label="已逾期" value={overdueTasks.length} token={token}/>
+                <SummaryCard label="已完成" value={doneTasks.length} token={token}/>
+            </SummaryGrid>
 
-            <div className="filter-row">
+            <FilterRow>
                 <Segmented value={filter} onChange={value => setFilter(value as FilterType)} options={filterOptions}/>
-            </div>
+            </FilterRow>
 
-            <div className="task-list">
+            <TaskListContainer $token={token}>
                 {visibleTasks.length === 0 ? (
-                    <div className="empty-text">暂无待办</div>
+                    <EmptyText $token={token}>暂无待办</EmptyText>
                 ) : visibleTasks.map(task => (
-                    <div className="task-item" key={task.id}>
-                        <div className="task-main">
-                            <div className="task-head">
+                    <TaskItemContainer $token={token} key={task.id}>
+                        <TaskMain>
+                            <TaskHead>
                                 <Checkbox checked={task.status === "done"} onChange={event => complete(task, event.target.checked)}/>
-                                <div className={`task-title ${task.status === "done" ? "done" : ""}`}>{task.title}</div>
-                            </div>
-                            <div className="task-meta">
+                                <TaskTitle $done={task.status === "done"} $token={token}>{task.title}</TaskTitle>
+                            </TaskHead>
+                            <TaskMeta $token={token}>
                                 <span>截止：{displayDate(task.dueAt)}</span>
                                 <span>提醒：{task.emailNotify ? (task.remindedAt ? "已发送" : "邮件") : "关闭"}</span>
                                 {priorityTag(task.priority)}
                                 {statusTag(task)}
-                            </div>
-                            {task.note && <div className="task-note">{task.note}</div>}
-                        </div>
-                        <Space className="task-actions">
+                            </TaskMeta>
+                            {task.note && <TaskNote $token={token}>{task.note}</TaskNote>}
+                        </TaskMain>
+                        <TaskActions>
                             <Button size="small" onClick={() => openModal(task)}>编辑</Button>
                             <Popconfirm title="删除这条待办？" okText="删除" cancelText="取消" onConfirm={() => remove(task)}>
                                 <Button size="small" danger>删除</Button>
                             </Popconfirm>
-                        </Space>
-                    </div>
+                        </TaskActions>
+                    </TaskItemContainer>
                 ))}
-            </div>
+            </TaskListContainer>
 
             <Modal
                 title={editingTask ? "编辑待办" : "新建待办"}
@@ -313,7 +480,7 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
                     </Form.Item>
                 </Form>
             </Modal>
-        </div>
+        </Shell>
     );
 }
 

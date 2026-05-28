@@ -5,7 +5,6 @@ import {useEffect, useState} from "react";
 import {createRoot} from "react-dom/client";
 import axios from "axios";
 import AppBase from "./AppBase";
-import "./style.css";
 
 const {darkAlgorithm, defaultAlgorithm} = theme;
 
