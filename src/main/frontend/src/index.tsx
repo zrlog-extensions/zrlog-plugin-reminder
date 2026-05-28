@@ -43,6 +43,7 @@ export interface Plugin {
 
 export interface ReminderInfoResponse {
     dark: boolean;
+    adminColorPrimary?: string;
     plugin: Plugin;
     tasks: ReminderTask[];
 }
@@ -85,6 +86,9 @@ const Index = () => {
             locale={zhCN}
             theme={{
                 algorithm: response.data.dark ? darkAlgorithm : defaultAlgorithm,
+                token: response.data.adminColorPrimary ? {
+                    colorPrimary: response.data.adminColorPrimary,
+                } : undefined,
             }}
         >
             <StyleProvider transformers={[legacyLogicalPropertiesTransformer]}>

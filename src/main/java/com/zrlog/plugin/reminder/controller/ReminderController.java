@@ -143,6 +143,7 @@ public class ReminderController {
     private Map<String, Object> pageData() {
         Map<String, Object> data = new HashMap<>();
         data.put("dark", isDarkMode());
+        data.put("adminColorPrimary", getAdminColorPrimary());
         data.put("plugin", session.getPlugin());
         data.put("tasks", repository.list(session));
         return successMap(data);
@@ -334,5 +335,23 @@ public class ReminderController {
 
     private boolean isDarkMode() {
         return requestInfo.getHeader() != null && Objects.equals(requestInfo.getHeader().get("Dark-Mode"), "true");
+    }
+
+    private String getAdminColorPrimary() {
+        if (requestInfo.getHeader() == null) {
+            return null;
+        }
+        String color = requestInfo.getHeader().get("Admin-Color-Primary");
+        if (color == null) {
+            color = requestInfo.getHeader().get("admin-color-primary");
+        }
+        if (color == null) {
+            for (Map.Entry<String, String> entry : requestInfo.getHeader().entrySet()) {
+                if ("admin-color-primary".equalsIgnoreCase(entry.getKey())) {
+                    return entry.getValue();
+                }
+            }
+        }
+        return color;
     }
 }
