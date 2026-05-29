@@ -3,34 +3,51 @@ package com.zrlog.plugin.reminder.util;
 import com.zrlog.plugin.IOSession;
 import com.zrlog.plugin.data.codec.MsgPacket;
 import com.zrlog.plugin.data.codec.MsgPacketStatus;
-import com.zrlog.plugin.reminder.model.ReminderEmailResponse;
+import com.zrlog.plugin.message.NotificationRequest;
 import com.zrlog.plugin.reminder.model.ReminderTask;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public class ReminderEmailUtils {
+public class ReminderNotificationUtils {
 
-    private static final int SUCCESS_STATUS = 200;
-    private static final Duration EMAIL_SERVICE_TIMEOUT = Duration.ofSeconds(60);
+    private static final Duration NOTIFICATION_TIMEOUT = Duration.ofSeconds(60);
 
-    public static void sendReminder(IOSession session, ReminderTask task) {
-        Map<String, String> map = new HashMap<>();
-        map.put("title", "[ZrLog Reminder] " + task.getTitle());
-        map.put("content", buildContent(task));
-        int msgId = session.requestService("emailService", map);
-        MsgPacket response = session.getResponseMsgPacketByMsgId(msgId, EMAIL_SERVICE_TIMEOUT);
+    private ReminderNotificationUtils() {
+    }
+
+    public static void publishReminder(IOSession session, ReminderTask task) {
+        NotificationRequest request = new NotificationRequest();
+        request.setSourcePluginId(session.getPlugin().getId());
+        request.setSourcePluginName(session.getPlugin().getShortName());
+        request.setSourceCapabilityKey("reminder.scanDueTasks");
+        request.setEventType("reminder.due");
+        request.setNotificationType("reminder");
+        request.setChannels(Collections.singletonList("email"));
+        request.setTitle("[ZrLog Reminder] " + task.getTitle());
+        request.setContent(buildContent(task));
+        request.setLevel(level(task.getPriority()));
+        request.setPayload(payload(task));
+        int msgId = session.publishNotification(request, null);
+        MsgPacket response = session.getResponseMsgPacketByMsgId(msgId, NOTIFICATION_TIMEOUT);
         if (response == null) {
-            throw new IllegalStateException("emailService response timeout");
+            throw new IllegalStateException("notification publish response timeout");
         }
         if (response.getStatus() != MsgPacketStatus.RESPONSE_SUCCESS) {
-            throw new IllegalStateException("emailService response error " + response.getStatus());
+            throw new IllegalStateException("notification publish failed " + response.getStatus());
         }
-        ReminderEmailResponse emailResponse = response.convertToClass(ReminderEmailResponse.class);
-        if (emailResponse.getStatus() != SUCCESS_STATUS) {
-            throw new IllegalStateException("emailService send failed, status " + emailResponse.getStatus());
-        }
+    }
+
+    private static Map<String, Object> payload(ReminderTask task) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", task.getId());
+        map.put("title", task.getTitle());
+        map.put("note", task.getNote());
+        map.put("dueAt", task.getDueAt());
+        map.put("priority", task.getPriority());
+        return map;
     }
 
     private static String buildContent(ReminderTask task) {
@@ -46,6 +63,13 @@ public class ReminderEmailUtils {
         }
         builder.append("</div>");
         return builder.toString();
+    }
+
+    private static String level(String priority) {
+        if ("high".equals(priority)) {
+            return "warning";
+        }
+        return "info";
     }
 
     private static String priorityText(String priority) {

@@ -3,57 +3,66 @@ package com.zrlog.plugin.reminder.service;
 import com.zrlog.plugin.IOSession;
 import com.zrlog.plugin.common.LoggerUtil;
 import com.zrlog.plugin.reminder.model.ReminderTask;
-import com.zrlog.plugin.reminder.util.ReminderEmailUtils;
+import com.zrlog.plugin.reminder.util.ReminderNotificationUtils;
 
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class ReminderScheduler {
 
     private static final Logger LOGGER = LoggerUtil.getLogger(ReminderScheduler.class);
-    private static final AtomicBoolean STARTED = new AtomicBoolean(false);
-    private static ScheduledExecutorService executorService;
-
-    public static void start(final IOSession session) {
-        if (!STARTED.compareAndSet(false, true)) {
-            return;
-        }
-        executorService = Executors.newSingleThreadScheduledExecutor();
-        executorService.scheduleWithFixedDelay(new Runnable() {
-            @Override
-            public void run() {
-                remindDueTasks(session);
-            }
-        }, 15, 60, TimeUnit.SECONDS);
-    }
-
-    public static void stop() {
-        if (!STARTED.compareAndSet(true, false)) {
-            return;
-        }
-        if (executorService != null) {
-            executorService.shutdownNow();
-            executorService = null;
-        }
-    }
 
     public static int remindDueTasks(IOSession session) {
+        return scanDueTasks(session).getSuccessCount();
+    }
+
+    public static ReminderScanResult scanDueTasks(IOSession session) {
+        ReminderScanResult result = new ReminderScanResult();
         int count = 0;
         List<ReminderTask> tasks = ReminderRepository.getInstance().dueTasks(session, System.currentTimeMillis());
+        result.setDueCount(tasks.size());
         for (ReminderTask task : tasks) {
             try {
-                ReminderEmailUtils.sendReminder(session, task);
+                ReminderNotificationUtils.publishReminder(session, task);
                 ReminderRepository.getInstance().markReminded(session, task.getId());
                 count++;
             } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, "send reminder email error", e);
+                result.failed();
+                LOGGER.log(Level.SEVERE, "publish reminder notification error", e);
             }
         }
-        return count;
+        result.setSuccessCount(count);
+        return result;
+    }
+
+    public static class ReminderScanResult {
+        private int dueCount;
+        private int successCount;
+        private int failedCount;
+
+        public int getDueCount() {
+            return dueCount;
+        }
+
+        public void setDueCount(int dueCount) {
+            this.dueCount = dueCount;
+        }
+
+        public int getSuccessCount() {
+            return successCount;
+        }
+
+        public void setSuccessCount(int successCount) {
+            this.successCount = successCount;
+        }
+
+        public int getFailedCount() {
+            return failedCount;
+        }
+
+        public void failed() {
+            failedCount++;
+        }
     }
 }
