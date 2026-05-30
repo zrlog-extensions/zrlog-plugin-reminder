@@ -3,10 +3,9 @@ package com.zrlog.plugin.reminder.service;
 import com.google.gson.Gson;
 import com.zrlog.plugin.IOSession;
 import com.zrlog.plugin.common.LoggerUtil;
-import com.zrlog.plugin.data.codec.ContentType;
+import com.zrlog.plugin.common.SessionKvRepository;
 import com.zrlog.plugin.reminder.model.ReminderStore;
 import com.zrlog.plugin.reminder.model.ReminderTask;
-import com.zrlog.plugin.type.ActionType;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -169,13 +168,7 @@ public class ReminderRepository {
 
     private ReminderStore readStore(IOSession session) {
         try {
-            Map<String, String> request = new HashMap<>();
-            request.put("key", STORE_KEY);
-            Map responseMap = session.getResponseSync(ContentType.JSON, request, ActionType.GET_WEBSITE, Map.class);
-            if (responseMap == null || responseMap.get(STORE_KEY) == null) {
-                return new ReminderStore();
-            }
-            String json = String.valueOf(responseMap.get(STORE_KEY));
+            String json = SessionKvRepository.of(session).get(STORE_KEY).orElse("");
             if (!notBlank(json)) {
                 return new ReminderStore();
             }
@@ -191,9 +184,7 @@ public class ReminderRepository {
     }
 
     private void writeStore(IOSession session, ReminderStore store) {
-        Map<String, String> request = new HashMap<>();
-        request.put(STORE_KEY, gson.toJson(store));
-        session.getResponseSync(ContentType.JSON, request, ActionType.SET_WEBSITE, Map.class);
+        SessionKvRepository.of(session).put(STORE_KEY, gson.toJson(store));
     }
 
     private String normalizeDueAt(String value) {
