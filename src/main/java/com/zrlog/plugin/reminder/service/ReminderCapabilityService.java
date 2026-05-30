@@ -14,8 +14,8 @@ import java.util.Map;
 @Service("reminder.scanDueTasks")
 @ScheduledCapability(
         key = "reminder.scanDueTasks",
-        label = "扫描到期提醒",
-        description = "扫描到期待办并发布标准通知",
+        label = "检查到期待办",
+        description = "扫描未完成的到期待办，并通过邮件服务发送提醒。",
         defaultCron = "*/5 * * * *",
         timeoutSeconds = 60
 )
