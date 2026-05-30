@@ -334,24 +334,10 @@ public class ReminderController {
     }
 
     private boolean isDarkMode() {
-        return requestInfo.getHeader() != null && Objects.equals(requestInfo.getHeader().get("Dark-Mode"), "true");
+        return requestInfo.isDarkMode();
     }
 
     private String getAdminColorPrimary() {
-        if (requestInfo.getHeader() == null) {
-            return null;
-        }
-        String color = requestInfo.getHeader().get("Admin-Color-Primary");
-        if (color == null) {
-            color = requestInfo.getHeader().get("admin-color-primary");
-        }
-        if (color == null) {
-            for (Map.Entry<String, String> entry : requestInfo.getHeader().entrySet()) {
-                if ("admin-color-primary".equalsIgnoreCase(entry.getKey())) {
-                    return entry.getValue();
-                }
-            }
-        }
-        return color;
+        return requestInfo.getAdminColorPrimary();
     }
 }
