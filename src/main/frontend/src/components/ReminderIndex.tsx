@@ -14,7 +14,7 @@ import {
 } from "antd";
 import axios from "axios";
 import {FunctionComponent, useMemo, useState} from "react";
-import styled, {createGlobalStyle} from "styled-components";
+import styled from "styled-components";
 import {theme} from "antd";
 import {ReminderInfoResponse, ReminderPriority, ReminderTask, StandardResponse} from "../index";
 
@@ -118,16 +118,6 @@ const statusTag = (task: ReminderTask) => {
     }
     return <Tag>待办</Tag>;
 }
-
-// CSS-in-JS Styled Components
-const GlobalStyle = createGlobalStyle<{ $token: any }>`
-  body {
-    margin: 0;
-    background-color: ${props => props.$token.colorBgLayout};
-    color: ${props => props.$token.colorText};
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
-  }
-`;
 
 const Shell = styled.div`
   width: 100%;
@@ -397,7 +387,6 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
 
     return (
         <Shell>
-            <GlobalStyle $token={token} />
             {contextHolder}
             <TopBar>
                 <div>
