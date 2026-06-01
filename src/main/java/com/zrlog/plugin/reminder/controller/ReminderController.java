@@ -6,11 +6,14 @@ import com.zrlog.plugin.data.codec.ContentType;
 import com.zrlog.plugin.data.codec.HttpRequestInfo;
 import com.zrlog.plugin.data.codec.MsgPacket;
 import com.zrlog.plugin.data.codec.MsgPacketStatus;
+import com.zrlog.plugin.reminder.model.ReminderNotificationChannels;
 import com.zrlog.plugin.reminder.model.ReminderTask;
+import com.zrlog.plugin.reminder.service.ReminderNotificationSettingRepository;
 import com.zrlog.plugin.reminder.service.ReminderRepository;
 import com.zrlog.plugin.reminder.service.ReminderScheduler;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -25,6 +28,7 @@ public class ReminderController {
     private final MsgPacket requestPacket;
     private final HttpRequestInfo requestInfo;
     private final ReminderRepository repository = ReminderRepository.getInstance();
+    private final ReminderNotificationSettingRepository notificationSettingRepository = ReminderNotificationSettingRepository.getInstance();
     private final Gson gson = new Gson();
 
     public ReminderController(IOSession session, MsgPacket requestPacket, HttpRequestInfo requestInfo) {
@@ -101,6 +105,23 @@ public class ReminderController {
         response(successMap(repository.list(session)));
     }
 
+    public void notificationChannels() {
+        response(successMap(notificationSettingRepository.get(session)));
+    }
+
+    public void saveNotificationChannels() {
+        Map<String, Object> params = params();
+        ReminderNotificationChannels channels = new ReminderNotificationChannels();
+        ReminderNotificationChannels.ReminderNotificationChannelData data =
+                new ReminderNotificationChannels.ReminderNotificationChannelData();
+        data.setDefaultChannels(channelList(params.get("defaultChannels")));
+        data.setImportantChannels(channelList(params.get("importantChannels")));
+        data.setFailedChannels(channelList(params.get("failedChannels")));
+        channels.setData(data);
+        notificationSettingRepository.save(session, channels);
+        response(successMap(notificationSettingRepository.get(session)));
+    }
+
     public void save() {
         Map<String, Object> params = params();
         String title = stringValue(params.get("title"));
@@ -146,6 +167,7 @@ public class ReminderController {
         data.put("adminColorPrimary", getAdminColorPrimary());
         data.put("plugin", session.getPlugin());
         data.put("tasks", repository.list(session));
+        data.put("notificationChannels", notificationSettingRepository.get(session));
         return successMap(data);
     }
 
@@ -219,7 +241,7 @@ public class ReminderController {
         form.add(fieldMap("title", "标题", "input", true, "例如：整理下周发布计划"));
         form.add(fieldMap("dueAt", "截止时间", "datetime", false, ""));
         form.add(fieldMap("note", "备注", "textarea", false, ""));
-        form.add(fieldMap("emailNotify", "邮件提醒", "switch", false, ""));
+        form.add(fieldMap("emailNotify", "通知提醒", "switch", false, ""));
         action.put("form", form);
         return action;
     }
@@ -331,6 +353,29 @@ public class ReminderController {
         }
         String text = stringValue(value);
         return "true".equalsIgnoreCase(text) || "on".equalsIgnoreCase(text) || "1".equals(text);
+    }
+
+    private List<String> channelList(Object value) {
+        if (value instanceof List) {
+            List<String> result = new ArrayList<>();
+            for (Object item : (List) value) {
+                addChannels(result, stringValue(item));
+            }
+            return result;
+        }
+        return Arrays.asList(stringValue(value).split(","));
+    }
+
+    private void addChannels(List<String> result, String text) {
+        if (!ReminderRepository.notBlank(text)) {
+            return;
+        }
+        String[] values = text.split(",");
+        for (String value : values) {
+            if (ReminderRepository.notBlank(value)) {
+                result.add(value.trim());
+            }
+        }
     }
 
     private boolean isDarkMode() {

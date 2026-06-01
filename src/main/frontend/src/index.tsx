@@ -25,6 +25,16 @@ export interface ReminderTask {
     completedAt?: string;
 }
 
+export interface ReminderNotificationChannels {
+    schema: string;
+    version: number;
+    data: {
+        defaultChannels: string[];
+        importantChannels: string[];
+        failedChannels: string[];
+    };
+}
+
 export interface Plugin {
     id: string;
     version: string;
@@ -45,6 +55,7 @@ export interface ReminderInfoResponse {
     adminColorPrimary?: string;
     plugin: Plugin;
     tasks: ReminderTask[];
+    notificationChannels: ReminderNotificationChannels;
 }
 
 export interface StandardResponse<T> {

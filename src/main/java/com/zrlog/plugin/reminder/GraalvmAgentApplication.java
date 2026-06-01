@@ -4,6 +4,7 @@ import com.zrlog.plugin.RunConstants;
 import com.zrlog.plugin.type.RunType;
 import com.zrlog.plugin.common.PluginNativeImageUtils;
 import com.zrlog.plugin.reminder.controller.ReminderController;
+import com.zrlog.plugin.reminder.model.ReminderNotificationChannels;
 import com.zrlog.plugin.reminder.model.ReminderStore;
 import com.zrlog.plugin.reminder.model.ReminderTask;
 import com.zrlog.plugin.reminder.service.ReminderCapabilityService;
@@ -18,7 +19,9 @@ public class GraalvmAgentApplication {
     public static void main(String[] args) throws IOException {
         RunConstants.runType = RunType.AGENT;
         PluginNativeImageUtils.usedGsonObject();
-        PluginNativeImageUtils.gsonNativeAgentByClazz(Arrays.asList(ReminderStore.class, ReminderTask.class));
+        PluginNativeImageUtils.gsonNativeAgentByClazz(Arrays.asList(ReminderStore.class, ReminderTask.class,
+                ReminderNotificationChannels.class,
+                ReminderNotificationChannels.ReminderNotificationChannelData.class));
         warmupServiceReflection();
         String basePath = System.getProperty("user.dir").replace("\\target", "").replace("/target", "");
         File file = new File(basePath + "/src/main/resources");

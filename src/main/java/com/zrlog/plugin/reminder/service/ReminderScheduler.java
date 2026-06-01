@@ -2,6 +2,7 @@ package com.zrlog.plugin.reminder.service;
 
 import com.zrlog.plugin.IOSession;
 import com.zrlog.plugin.common.LoggerUtil;
+import com.zrlog.plugin.reminder.model.ReminderNotificationChannels;
 import com.zrlog.plugin.reminder.model.ReminderTask;
 import com.zrlog.plugin.reminder.util.ReminderNotificationUtils;
 
@@ -22,9 +23,10 @@ public class ReminderScheduler {
         int count = 0;
         List<ReminderTask> tasks = ReminderRepository.getInstance().dueTasks(session, System.currentTimeMillis());
         result.setDueCount(tasks.size());
+        ReminderNotificationChannels channels = ReminderNotificationSettingRepository.getInstance().get(session);
         for (ReminderTask task : tasks) {
             try {
-                ReminderNotificationUtils.publishReminder(session, task);
+                ReminderNotificationUtils.publishReminder(session, task, channels);
                 ReminderRepository.getInstance().markReminded(session, task.getId());
                 count++;
             } catch (Exception e) {

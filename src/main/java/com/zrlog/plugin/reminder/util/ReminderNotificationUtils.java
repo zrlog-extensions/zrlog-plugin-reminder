@@ -4,10 +4,10 @@ import com.zrlog.plugin.IOSession;
 import com.zrlog.plugin.data.codec.MsgPacket;
 import com.zrlog.plugin.data.codec.MsgPacketStatus;
 import com.zrlog.plugin.message.NotificationRequest;
+import com.zrlog.plugin.reminder.model.ReminderNotificationChannels;
 import com.zrlog.plugin.reminder.model.ReminderTask;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -18,18 +18,8 @@ public class ReminderNotificationUtils {
     private ReminderNotificationUtils() {
     }
 
-    public static void publishReminder(IOSession session, ReminderTask task) {
-        NotificationRequest request = new NotificationRequest();
-        request.setSourcePluginId(session.getPlugin().getId());
-        request.setSourcePluginName(session.getPlugin().getShortName());
-        request.setSourceCapabilityKey("reminder.scanDueTasks");
-        request.setEventType("reminder.due");
-        request.setNotificationType("reminder");
-        request.setChannels(Collections.singletonList("email"));
-        request.setTitle("[ZrLog Reminder] " + task.getTitle());
-        request.setContent(buildContent(task));
-        request.setLevel(level(task.getPriority()));
-        request.setPayload(payload(task));
+    public static void publishReminder(IOSession session, ReminderTask task, ReminderNotificationChannels channels) {
+        NotificationRequest request = createRequest(task, channels, session.getPlugin().getId(), session.getPlugin().getShortName());
         int msgId = session.publishNotification(request, null);
         MsgPacket response = session.getResponseMsgPacketByMsgId(msgId, NOTIFICATION_TIMEOUT);
         if (response == null) {
@@ -38,6 +28,24 @@ public class ReminderNotificationUtils {
         if (response.getStatus() != MsgPacketStatus.RESPONSE_SUCCESS) {
             throw new IllegalStateException("notification publish failed " + response.getStatus());
         }
+    }
+
+    static NotificationRequest createRequest(ReminderTask task,
+                                             ReminderNotificationChannels channels,
+                                             String sourcePluginId,
+                                             String sourcePluginName) {
+        NotificationRequest request = new NotificationRequest();
+        request.setSourcePluginId(sourcePluginId);
+        request.setSourcePluginName(sourcePluginName);
+        request.setSourceCapabilityKey("reminder.scanDueTasks");
+        request.setEventType("reminder.due");
+        request.setNotificationType("reminder");
+        request.setChannels(ReminderNotificationChannels.normalize(channels).channelsFor(task));
+        request.setTitle("[ZrLog Reminder] " + task.getTitle());
+        request.setContent(buildContent(task));
+        request.setLevel(level(task.getPriority()));
+        request.setPayload(payload(task));
+        return request;
     }
 
     private static Map<String, Object> payload(ReminderTask task) {

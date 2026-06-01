@@ -12,11 +12,12 @@ import {
     Tag,
     message,
 } from "antd";
+import {SettingOutlined} from "@ant-design/icons";
 import axios from "axios";
 import {FunctionComponent, useMemo, useState} from "react";
 import styled from "styled-components";
 import {theme} from "antd";
-import {ReminderInfoResponse, ReminderPriority, ReminderTask, StandardResponse} from "../index";
+import {ReminderInfoResponse, ReminderNotificationChannels, ReminderPriority, ReminderTask, StandardResponse} from "../index";
 
 type FilterType = "open" | "today" | "overdue" | "done";
 
@@ -27,6 +28,12 @@ type ReminderFormValues = {
     dueAt?: string;
     priority: ReminderPriority;
     emailNotify: boolean;
+}
+
+type NotificationChannelFormValues = {
+    defaultChannels: string;
+    importantChannels: string;
+    failedChannels: string;
 }
 
 type ReminderIndexProps = {
@@ -63,6 +70,20 @@ const getList = async () => {
     }
     return data.data;
 }
+
+const defaultNotificationChannels = (): ReminderNotificationChannels => ({
+    schema: "plugin.reminder.notification.channels",
+    version: 1,
+    data: {
+        defaultChannels: ["email"],
+        importantChannels: ["email"],
+        failedChannels: ["email"],
+    },
+});
+
+const channelText = (values?: string[]) => (values && values.length > 0 ? values : ["email"]).join(",");
+
+const channelLabel = (values?: string[]) => (values && values.length > 0 ? values : ["email"]).join(" / ");
 
 const toInputDate = (value?: string) => {
     if (!value) {
@@ -286,7 +307,12 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
     const [loading, setLoading] = useState(false);
     const [editingTask, setEditingTask] = useState<ReminderTask | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
+    const [channelModalOpen, setChannelModalOpen] = useState(false);
+    const [notificationChannels, setNotificationChannels] = useState<ReminderNotificationChannels>(
+        data.notificationChannels || defaultNotificationChannels()
+    );
     const [form] = Form.useForm<ReminderFormValues>();
+    const [channelForm] = Form.useForm<NotificationChannelFormValues>();
     const [messageApi, contextHolder] = message.useMessage();
 
     const openTasks = useMemo(() => tasks.filter(task => task.status !== "done"), [tasks]);
@@ -334,6 +360,32 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
         setModalOpen(false);
         setEditingTask(null);
         form.resetFields();
+    }
+
+    const openChannelModal = () => {
+        const channels = notificationChannels || defaultNotificationChannels();
+        channelForm.setFieldsValue({
+            defaultChannels: channelText(channels.data.defaultChannels),
+            importantChannels: channelText(channels.data.importantChannels),
+            failedChannels: channelText(channels.data.failedChannels),
+        });
+        setChannelModalOpen(true);
+    }
+
+    const saveChannels = async () => {
+        const values = await channelForm.validateFields();
+        try {
+            const nextChannels = await request<ReminderNotificationChannels>("saveNotificationChannels", {
+                defaultChannels: values.defaultChannels || "email",
+                importantChannels: values.importantChannels || values.defaultChannels || "email",
+                failedChannels: values.failedChannels || values.defaultChannels || "email",
+            });
+            setNotificationChannels(nextChannels);
+            setChannelModalOpen(false);
+            messageApi.success("已保存");
+        } catch (e) {
+            messageApi.error(e instanceof Error ? e.message : "保存失败");
+        }
     }
 
     const save = async () => {
@@ -391,10 +443,11 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
             <TopBar>
                 <div>
                     <Title>待办提醒</Title>
-                    <SubTitle $token={token}>记录待办、标记进度，到期后通过 ZrLog 邮件服务发送提醒</SubTitle>
+                    <SubTitle $token={token}>记录待办、标记进度，到期后通过 ZrLog 通知渠道发送提醒</SubTitle>
                 </div>
                 <Space wrap>
                     <Button onClick={load} loading={loading}>刷新</Button>
+                    <Button icon={<SettingOutlined/>} onClick={openChannelModal}>通知设置</Button>
                     <Button onClick={remindNow}>立即检查提醒</Button>
                     <Button type="primary" onClick={() => openModal()}>新建待办</Button>
                 </Space>
@@ -423,7 +476,7 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
                             </TaskHead>
                             <TaskMeta $token={token}>
                                 <span>截止：{displayDate(task.dueAt)}</span>
-                                <span>提醒：{task.emailNotify ? (task.remindedAt ? "已发送" : "邮件") : "关闭"}</span>
+                                <span>通知：{task.emailNotify ? (task.remindedAt ? "已发送" : "待发送") : "关闭"}</span>
                                 {priorityTag(task.priority)}
                                 {statusTag(task)}
                             </TaskMeta>
@@ -465,7 +518,29 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
                         <Input.TextArea rows={4} maxLength={500}/>
                     </Form.Item>
                     <Form.Item name="emailNotify" valuePropName="checked">
-                        <Switch checkedChildren="邮件提醒" unCheckedChildren="仅记录"/>
+                        <Switch checkedChildren="通知提醒" unCheckedChildren="仅记录"/>
+                    </Form.Item>
+                </Form>
+            </Modal>
+
+            <Modal
+                title="通知设置"
+                open={channelModalOpen}
+                destroyOnClose
+                okText="保存"
+                cancelText="取消"
+                onCancel={() => setChannelModalOpen(false)}
+                onOk={saveChannels}
+            >
+                <Form form={channelForm} layout="vertical" preserve={false}>
+                    <Form.Item label="默认渠道" name="defaultChannels" rules={[{required: true, message: "请输入通知渠道"}]}>
+                        <Input placeholder="email"/>
+                    </Form.Item>
+                    <Form.Item label="重要渠道" name="importantChannels">
+                        <Input placeholder={channelLabel(notificationChannels.data.defaultChannels)}/>
+                    </Form.Item>
+                    <Form.Item label="失败渠道" name="failedChannels">
+                        <Input placeholder={channelLabel(notificationChannels.data.defaultChannels)}/>
                     </Form.Item>
                 </Form>
             </Modal>
