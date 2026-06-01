@@ -1,6 +1,7 @@
 package com.zrlog.plugin.reminder.service;
 
 import com.zrlog.plugin.IOSession;
+import com.zrlog.plugin.api.Capability;
 import com.zrlog.plugin.api.IPluginService;
 import com.zrlog.plugin.api.ScheduledCapability;
 import com.zrlog.plugin.api.Service;
@@ -12,10 +13,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Service("reminder.scanDueTasks")
+@Capability(key = "reminder.scanDueTasks", riskLevel = "medium")
 @ScheduledCapability(
         key = "reminder.scanDueTasks",
         label = "检查到期待办",
-        description = "扫描未完成的到期待办，并通过邮件服务发送提醒。",
+        description = "扫描未完成的到期待办，并通过配置的通知渠道发送提醒。",
         defaultCron = "*/5 * * * *",
         timeoutSeconds = 60
 )
