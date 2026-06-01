@@ -35,6 +35,24 @@ export interface ReminderNotificationChannels {
     };
 }
 
+export interface NotificationProviderRow {
+    channel: string;
+    providerPluginId: string;
+    providerPluginName?: string;
+    providerPluginPreviewImageBase64?: string;
+    capabilityKey: string;
+    capabilityLabel?: string;
+    providerStatus: string;
+    selected: boolean;
+    confirmed: boolean;
+    reviewRequired: boolean;
+}
+
+export interface ReminderNotificationChannelInfo {
+    settings: ReminderNotificationChannels;
+    providers: NotificationProviderRow[];
+}
+
 export interface Plugin {
     id: string;
     version: string;

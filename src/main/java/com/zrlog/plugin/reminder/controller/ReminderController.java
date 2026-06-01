@@ -13,14 +13,17 @@ import com.zrlog.plugin.reminder.service.ReminderRepository;
 import com.zrlog.plugin.reminder.service.ReminderScheduler;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Arrays;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 public class ReminderController {
 
@@ -106,20 +109,48 @@ public class ReminderController {
     }
 
     public void notificationChannels() {
-        response(successMap(notificationSettingRepository.get(session)));
+        try {
+            response(successMap(notificationChannelInfo()));
+        } catch (Exception e) {
+            response(errorMap(e.getMessage()));
+        }
     }
 
     public void saveNotificationChannels() {
         Map<String, Object> params = params();
+        List providers;
+        try {
+            providers = queryNotificationProviders();
+        } catch (Exception e) {
+            response(errorMap(e.getMessage()));
+            return;
+        }
+        Set<String> availableChannels = availableChannels(providers);
+        List<String> defaultChannels = configuredChannels(params.get("defaultChannels"), availableChannels);
+        if (defaultChannels.isEmpty()) {
+            response(errorMap("请选择 plugin-core 中可用的通知渠道"));
+            return;
+        }
+        List<String> importantChannels = configuredChannels(params.get("importantChannels"), availableChannels);
+        if (importantChannels.isEmpty()) {
+            importantChannels = defaultChannels;
+        }
+        List<String> failedChannels = configuredChannels(params.get("failedChannels"), availableChannels);
+        if (failedChannels.isEmpty()) {
+            failedChannels = defaultChannels;
+        }
         ReminderNotificationChannels channels = new ReminderNotificationChannels();
         ReminderNotificationChannels.ReminderNotificationChannelData data =
                 new ReminderNotificationChannels.ReminderNotificationChannelData();
-        data.setDefaultChannels(channelList(params.get("defaultChannels")));
-        data.setImportantChannels(channelList(params.get("importantChannels")));
-        data.setFailedChannels(channelList(params.get("failedChannels")));
+        data.setDefaultChannels(defaultChannels);
+        data.setImportantChannels(importantChannels);
+        data.setFailedChannels(failedChannels);
         channels.setData(data);
         notificationSettingRepository.save(session, channels);
-        response(successMap(notificationSettingRepository.get(session)));
+        Map<String, Object> result = new HashMap<>();
+        result.put("settings", notificationSettingRepository.get(session));
+        result.put("providers", providers);
+        response(successMap(result));
     }
 
     public void save() {
@@ -169,6 +200,68 @@ public class ReminderController {
         data.put("tasks", repository.list(session));
         data.put("notificationChannels", notificationSettingRepository.get(session));
         return successMap(data);
+    }
+
+    private Map<String, Object> notificationChannelInfo() {
+        Map<String, Object> data = new HashMap<>();
+        data.put("settings", notificationSettingRepository.get(session));
+        data.put("providers", queryNotificationProviders());
+        return data;
+    }
+
+    private List queryNotificationProviders() {
+        int msgId = session.queryNotificationChannels(null);
+        MsgPacket response = session.getResponseMsgPacketByMsgId(msgId, Duration.ofSeconds(15));
+        if (response == null) {
+            throw new IllegalStateException("通知渠道查询超时");
+        }
+        Map result = gson.fromJson(response.getDataStr(), Map.class);
+        if (response.getStatus() != MsgPacketStatus.RESPONSE_SUCCESS
+                || result == null
+                || Boolean.FALSE.equals(result.get("success"))
+                || numberValue(result.get("code")) > 0) {
+            throw new IllegalStateException(stringValue(result == null ? null : result.get("message")));
+        }
+        Object items = result.get("items");
+        if (items instanceof List) {
+            return (List) items;
+        }
+        return new ArrayList();
+    }
+
+    private int numberValue(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        try {
+            return Integer.parseInt(stringValue(value));
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private Set<String> availableChannels(List providers) {
+        Set<String> channels = new LinkedHashSet<>();
+        for (Object item : providers) {
+            if (!(item instanceof Map)) {
+                continue;
+            }
+            String channel = stringValue(((Map) item).get("channel"));
+            if (ReminderRepository.notBlank(channel)) {
+                channels.add(channel);
+            }
+        }
+        return channels;
+    }
+
+    private List<String> configuredChannels(Object value, Set<String> availableChannels) {
+        List<String> result = new ArrayList<>();
+        for (String channel : channelList(value)) {
+            if (availableChannels.contains(channel) && !result.contains(channel)) {
+                result.add(channel);
+            }
+        }
+        return result;
     }
 
     private Map<String, Object> surfaceData() {

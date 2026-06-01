@@ -4,6 +4,7 @@ import com.zrlog.plugin.IOSession;
 import com.zrlog.plugin.data.codec.MsgPacket;
 import com.zrlog.plugin.data.codec.MsgPacketStatus;
 import com.zrlog.plugin.message.NotificationRequest;
+import com.zrlog.plugin.render.SimpleTemplateRender;
 import com.zrlog.plugin.reminder.model.ReminderNotificationChannels;
 import com.zrlog.plugin.reminder.model.ReminderTask;
 
@@ -14,6 +15,7 @@ import java.util.Map;
 public class ReminderNotificationUtils {
 
     private static final Duration NOTIFICATION_TIMEOUT = Duration.ofSeconds(60);
+    private static final SimpleTemplateRender TEMPLATE_RENDER = new SimpleTemplateRender();
 
     private ReminderNotificationUtils() {
     }
@@ -42,10 +44,19 @@ public class ReminderNotificationUtils {
         request.setNotificationType("reminder");
         request.setChannels(ReminderNotificationChannels.normalize(channels).channelsFor(task));
         request.setTitle("[ZrLog Reminder] " + task.getTitle());
-        request.setContent(buildContent(task));
+        request.setContent(TEMPLATE_RENDER.render("/notification/reminder-due", null, templateData(task)));
         request.setLevel(level(task.getPriority()));
         request.setPayload(payload(task));
         return request;
+    }
+
+    private static Map<String, Object> templateData(ReminderTask task) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("title", escape(task.getTitle()));
+        map.put("dueAt", escape(emptyText(task.getDueAt())));
+        map.put("priorityText", escape(priorityText(task.getPriority())));
+        map.put("note", escape(emptyText(task.getNote())));
+        return map;
     }
 
     private static Map<String, Object> payload(ReminderTask task) {
@@ -56,21 +67,6 @@ public class ReminderNotificationUtils {
         map.put("dueAt", task.getDueAt());
         map.put("priority", task.getPriority());
         return map;
-    }
-
-    private static String buildContent(ReminderTask task) {
-        StringBuilder builder = new StringBuilder();
-        builder.append("<div style=\"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1.7\">");
-        builder.append("<h2 style=\"margin:0 0 12px\">").append(escape(task.getTitle())).append("</h2>");
-        if (task.getDueAt() != null && !task.getDueAt().isEmpty()) {
-            builder.append("<p><strong>截止时间：</strong>").append(escape(task.getDueAt())).append("</p>");
-        }
-        builder.append("<p><strong>优先级：</strong>").append(escape(priorityText(task.getPriority()))).append("</p>");
-        if (task.getNote() != null && !task.getNote().isEmpty()) {
-            builder.append("<p style=\"white-space:pre-wrap\">").append(escape(task.getNote())).append("</p>");
-        }
-        builder.append("</div>");
-        return builder.toString();
     }
 
     private static String level(String priority) {
@@ -88,6 +84,10 @@ public class ReminderNotificationUtils {
             return "低";
         }
         return "普通";
+    }
+
+    private static String emptyText(String value) {
+        return value == null || value.trim().isEmpty() ? "-" : value;
     }
 
     private static String escape(String value) {

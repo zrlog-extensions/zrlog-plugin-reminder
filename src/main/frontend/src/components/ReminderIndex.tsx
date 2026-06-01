@@ -1,4 +1,5 @@
 import {
+    Alert,
     Button,
     Checkbox,
     Form,
@@ -17,7 +18,15 @@ import axios from "axios";
 import {FunctionComponent, useMemo, useState} from "react";
 import styled from "styled-components";
 import {theme} from "antd";
-import {ReminderInfoResponse, ReminderNotificationChannels, ReminderPriority, ReminderTask, StandardResponse} from "../index";
+import {
+    NotificationProviderRow,
+    ReminderInfoResponse,
+    ReminderNotificationChannelInfo,
+    ReminderNotificationChannels,
+    ReminderPriority,
+    ReminderTask,
+    StandardResponse,
+} from "../index";
 
 type FilterType = "open" | "today" | "overdue" | "done";
 
@@ -31,9 +40,9 @@ type ReminderFormValues = {
 }
 
 type NotificationChannelFormValues = {
-    defaultChannels: string;
-    importantChannels: string;
-    failedChannels: string;
+    defaultChannels: string[];
+    importantChannels: string[];
+    failedChannels: string[];
 }
 
 type ReminderIndexProps = {
@@ -71,6 +80,14 @@ const getList = async () => {
     return data.data;
 }
 
+const fetchNotificationChannelInfo = async () => {
+    const {data} = await axios.get<StandardResponse<ReminderNotificationChannelInfo>>("notificationChannels");
+    if (!data.success) {
+        throw new Error(data.message || "加载失败");
+    }
+    return data.data;
+}
+
 const defaultNotificationChannels = (): ReminderNotificationChannels => ({
     schema: "plugin.reminder.notification.channels",
     version: 1,
@@ -80,10 +97,6 @@ const defaultNotificationChannels = (): ReminderNotificationChannels => ({
         failedChannels: ["email"],
     },
 });
-
-const channelText = (values?: string[]) => (values && values.length > 0 ? values : ["email"]).join(",");
-
-const channelLabel = (values?: string[]) => (values && values.length > 0 ? values : ["email"]).join(" / ");
 
 const toInputDate = (value?: string) => {
     if (!value) {
@@ -305,12 +318,14 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
     const [tasks, setTasks] = useState<ReminderTask[]>(data.tasks || []);
     const [filter, setFilter] = useState<FilterType>("open");
     const [loading, setLoading] = useState(false);
+    const [channelLoading, setChannelLoading] = useState(false);
     const [editingTask, setEditingTask] = useState<ReminderTask | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
     const [channelModalOpen, setChannelModalOpen] = useState(false);
     const [notificationChannels, setNotificationChannels] = useState<ReminderNotificationChannels>(
         data.notificationChannels || defaultNotificationChannels()
     );
+    const [notificationProviders, setNotificationProviders] = useState<NotificationProviderRow[]>([]);
     const [form] = Form.useForm<ReminderFormValues>();
     const [channelForm] = Form.useForm<NotificationChannelFormValues>();
     const [messageApi, contextHolder] = message.useMessage();
@@ -331,6 +346,26 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
         }
         return task.status !== "done";
     }), [filter, tasks]);
+    const channelOptions = useMemo(() => {
+        const rowsByChannel = new Map<string, NotificationProviderRow[]>();
+        notificationProviders.forEach(row => {
+            if (!row.channel) {
+                return;
+            }
+            rowsByChannel.set(row.channel, [...(rowsByChannel.get(row.channel) || []), row]);
+        });
+        return Array.from(rowsByChannel.entries()).sort(([left], [right]) => left.localeCompare(right)).map(([channel, rows]) => {
+            const provider = rows.find(row => row.selected) || rows.find(row => row.confirmed) || rows[0];
+            const providerName = provider?.providerPluginName || provider?.capabilityLabel || "";
+            return {
+                label: providerName ? `${channel} (${providerName})` : channel,
+                value: channel,
+            };
+        });
+    }, [notificationProviders]);
+    const availableChannelValues = useMemo(() => new Set(channelOptions.map(option => option.value)), [channelOptions]);
+
+    const filterAvailableChannels = (channels?: string[]) => (channels || []).filter(channel => availableChannelValues.has(channel));
 
     const load = async () => {
         setLoading(true);
@@ -362,25 +397,55 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
         form.resetFields();
     }
 
+    const loadNotificationChannels = async () => {
+        setChannelLoading(true);
+        try {
+            const info = await fetchNotificationChannelInfo();
+            setNotificationChannels(info.settings || defaultNotificationChannels());
+            setNotificationProviders(info.providers || []);
+            const values = new Set((info.providers || []).map(row => row.channel).filter(Boolean));
+            const defaultChannels = (info.settings?.data?.defaultChannels || []).filter(channel => values.has(channel));
+            const importantChannels = (info.settings?.data?.importantChannels || []).filter(channel => values.has(channel));
+            const failedChannels = (info.settings?.data?.failedChannels || []).filter(channel => values.has(channel));
+            channelForm.setFieldsValue({
+                defaultChannels,
+                importantChannels: importantChannels.length > 0 ? importantChannels : defaultChannels,
+                failedChannels: failedChannels.length > 0 ? failedChannels : defaultChannels,
+            });
+        } catch (e) {
+            messageApi.error(e instanceof Error ? e.message : "通知渠道加载失败");
+        } finally {
+            setChannelLoading(false);
+        }
+    }
+
     const openChannelModal = () => {
         const channels = notificationChannels || defaultNotificationChannels();
         channelForm.setFieldsValue({
-            defaultChannels: channelText(channels.data.defaultChannels),
-            importantChannels: channelText(channels.data.importantChannels),
-            failedChannels: channelText(channels.data.failedChannels),
+            defaultChannels: filterAvailableChannels(channels.data.defaultChannels),
+            importantChannels: filterAvailableChannels(channels.data.importantChannels),
+            failedChannels: filterAvailableChannels(channels.data.failedChannels),
         });
         setChannelModalOpen(true);
+        loadNotificationChannels();
     }
 
     const saveChannels = async () => {
         const values = await channelForm.validateFields();
         try {
-            const nextChannels = await request<ReminderNotificationChannels>("saveNotificationChannels", {
-                defaultChannels: values.defaultChannels || "email",
-                importantChannels: values.importantChannels || values.defaultChannels || "email",
-                failedChannels: values.failedChannels || values.defaultChannels || "email",
+            const defaultChannels = filterAvailableChannels(values.defaultChannels);
+            const importantChannels = filterAvailableChannels(values.importantChannels || values.defaultChannels);
+            const failedChannels = filterAvailableChannels(values.failedChannels || values.defaultChannels);
+            if (defaultChannels.length === 0) {
+                throw new Error("请选择 plugin-core 中可用的通知渠道");
+            }
+            const nextChannels = await request<ReminderNotificationChannelInfo>("saveNotificationChannels", {
+                defaultChannels: defaultChannels.join(","),
+                importantChannels: (importantChannels.length > 0 ? importantChannels : defaultChannels).join(","),
+                failedChannels: (failedChannels.length > 0 ? failedChannels : defaultChannels).join(","),
             });
-            setNotificationChannels(nextChannels);
+            setNotificationChannels(nextChannels.settings || defaultNotificationChannels());
+            setNotificationProviders(nextChannels.providers || notificationProviders);
             setChannelModalOpen(false);
             messageApi.success("已保存");
         } catch (e) {
@@ -533,16 +598,41 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
                 onOk={saveChannels}
             >
                 <Form form={channelForm} layout="vertical" preserve={false}>
-                    <Form.Item label="默认渠道" name="defaultChannels" rules={[{required: true, message: "请输入通知渠道"}]}>
-                        <Input placeholder="email"/>
+                    <Form.Item label="默认渠道" name="defaultChannels" rules={[{required: true, message: "请选择通知渠道"}]}>
+                        <Select
+                            mode="multiple"
+                            loading={channelLoading}
+                            options={channelOptions}
+                            placeholder="选择通知渠道"
+                            notFoundContent={channelLoading ? "加载中" : "暂无可用渠道"}
+                        />
                     </Form.Item>
                     <Form.Item label="重要渠道" name="importantChannels">
-                        <Input placeholder={channelLabel(notificationChannels.data.defaultChannels)}/>
+                        <Select
+                            mode="multiple"
+                            loading={channelLoading}
+                            options={channelOptions}
+                            placeholder="默认使用默认渠道"
+                            notFoundContent={channelLoading ? "加载中" : "暂无可用渠道"}
+                        />
                     </Form.Item>
                     <Form.Item label="失败渠道" name="failedChannels">
-                        <Input placeholder={channelLabel(notificationChannels.data.defaultChannels)}/>
+                        <Select
+                            mode="multiple"
+                            loading={channelLoading}
+                            options={channelOptions}
+                            placeholder="默认使用默认渠道"
+                            notFoundContent={channelLoading ? "加载中" : "暂无可用渠道"}
+                        />
                     </Form.Item>
                 </Form>
+                {notificationProviders.length === 0 && !channelLoading && (
+                    <Alert
+                        type="warning"
+                        showIcon
+                        message="plugin-core 当前没有可用通知渠道"
+                    />
+                )}
             </Modal>
         </Shell>
     );
