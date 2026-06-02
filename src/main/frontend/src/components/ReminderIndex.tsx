@@ -3,6 +3,7 @@ import {
     Button,
     Checkbox,
     Form,
+    Grid,
     Input,
     Modal,
     Popconfirm,
@@ -300,6 +301,14 @@ const Shell = styled.div`
   margin: 0 auto;
   padding: 20px;
   box-sizing: border-box;
+
+  @media (max-width: 1024px) {
+    padding: 16px;
+  }
+
+  @media (max-width: 575px) {
+    padding: 12px;
+  }
 `;
 
 const TopBar = styled.div`
@@ -309,11 +318,22 @@ const TopBar = styled.div`
   gap: 16px;
   margin-bottom: 18px;
 
-  @media (max-width: 720px) {
+  @media (max-width: 960px) {
     display: block;
     
     .ant-space {
       margin-top: 12px;
+    }
+  }
+
+  @media (max-width: 575px) {
+    .ant-space {
+      display: flex;
+      width: 100%;
+    }
+
+    .ant-btn {
+      flex: 1;
     }
   }
 `;
@@ -338,6 +358,10 @@ const SummaryGrid = styled.div`
   margin-bottom: 16px;
 
   @media (max-width: 720px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 1024px) and (min-width: 721px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 `;
@@ -368,7 +392,7 @@ const FilterRow = styled.div`
   gap: 12px;
   margin: 8px 0 14px;
 
-  @media (max-width: 720px) {
+  @media (max-width: 960px) {
     display: block;
   }
 `;
@@ -391,7 +415,7 @@ const TaskItemContainer = styled.div<{ $token: any }>`
     border-bottom: 0;
   }
 
-  @media (max-width: 720px) {
+  @media (max-width: 900px) {
     grid-template-columns: 1fr;
   }
 `;
@@ -548,6 +572,8 @@ const SummaryCard: FunctionComponent<{ label: string; value: number; token: any 
 
 const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
     const {token} = theme.useToken();
+    const screens = Grid.useBreakpoint();
+    const isPhone = Boolean(screens.xs && !screens.sm);
     const [tasks, setTasks] = useState<ReminderTask[]>(data.tasks || []);
     const [filter, setFilter] = useState<FilterType>("open");
     const [loading, setLoading] = useState(false);
@@ -813,6 +839,7 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
                 cancelText="取消"
                 onCancel={closeModal}
                 onOk={save}
+                width={isPhone ? "calc(100vw - 24px)" : 560}
             >
                 <Form form={form} layout="vertical" preserve={false}>
                     <Form.Item name="id" hidden>
@@ -882,6 +909,7 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
                 cancelText="取消"
                 onCancel={() => setChannelModalOpen(false)}
                 onOk={saveChannels}
+                width={isPhone ? "calc(100vw - 24px)" : 520}
             >
                 <Form form={channelForm} layout="vertical" preserve={false}>
                     <Form.Item label="默认渠道" name="defaultChannels" rules={[{required: true, message: "请选择通知渠道"}]}>
