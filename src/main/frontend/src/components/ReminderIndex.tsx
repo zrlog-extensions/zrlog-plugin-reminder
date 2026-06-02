@@ -24,6 +24,7 @@ import {
     ReminderNotificationChannelInfo,
     ReminderNotificationChannels,
     ReminderPriority,
+    ReminderRepeatType,
     ReminderTask,
     StandardResponse,
 } from "../index";
@@ -35,6 +36,7 @@ type ReminderFormValues = {
     title: string;
     note?: string;
     dueAt?: string;
+    repeatType: ReminderRepeatType;
     priority: ReminderPriority;
     emailNotify: boolean;
 }
@@ -55,12 +57,25 @@ const priorityOptions = [
     {label: "低", value: "low"},
 ];
 
+const repeatOptions = [
+    {label: "不重复", value: "none"},
+    {label: "每天", value: "daily"},
+    {label: "每周", value: "weekly"},
+    {label: "每月", value: "monthly"},
+    {label: "每年", value: "yearly"},
+];
+
 const filterOptions = [
     {label: "待处理", value: "open"},
     {label: "今天", value: "today"},
     {label: "已逾期", value: "overdue"},
     {label: "已完成", value: "done"},
 ];
+
+type ReminderTimeOption = {
+    label: string;
+    value: string;
+}
 
 const request = async <T, >(url: string, params?: Record<string, string>) => {
     const {data} = await axios.post<StandardResponse<T>>(url, new URLSearchParams(params), {
@@ -94,6 +109,8 @@ const defaultNotificationChannels = (): ReminderNotificationChannels => ({
     failedChannels: ["email"],
 });
 
+const padNumber = (value: number) => value < 10 ? `0${value}` : String(value);
+
 const toInputDate = (value?: string) => {
     if (!value) {
         return "";
@@ -101,29 +118,157 @@ const toInputDate = (value?: string) => {
     return value.replace(" ", "T").slice(0, 16);
 }
 
-const displayDate = (value?: string) => {
-    if (!value) {
-        return "未设置截止时间";
+const toDateInputValue = (date: Date) => {
+    return `${date.getFullYear()}-${padNumber(date.getMonth() + 1)}-${padNumber(date.getDate())}`
+        + `T${padNumber(date.getHours())}:${padNumber(date.getMinutes())}`;
+}
+
+const cloneAt = (date: Date, hour: number, minute: number) => {
+    const next = new Date(date);
+    next.setHours(hour, minute, 0, 0);
+    return next;
+}
+
+const addDays = (date: Date, days: number) => {
+    const next = new Date(date);
+    next.setDate(next.getDate() + days);
+    return next;
+}
+
+const addMonths = (date: Date, months: number) => {
+    const next = new Date(date);
+    next.setMonth(next.getMonth() + months);
+    return next;
+}
+
+const addYears = (date: Date, years: number) => {
+    const next = new Date(date);
+    next.setFullYear(next.getFullYear() + years);
+    return next;
+}
+
+const nextWeekdayAt = (weekday: number, hour: number, minute: number, forceNextWeek?: boolean) => {
+    const now = new Date();
+    let days = (weekday - now.getDay() + 7) % 7;
+    if (forceNextWeek && days === 0) {
+        days = 7;
     }
-    return value.slice(0, 16);
+    let date = cloneAt(addDays(now, days), hour, minute);
+    if (date.getTime() <= now.getTime()) {
+        date = cloneAt(addDays(date, 7), hour, minute);
+    }
+    return date;
+}
+
+const buildReminderTimeOptions = (): ReminderTimeOption[] => {
+    const now = new Date();
+    const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
+    let evening = cloneAt(now, 18, 0);
+    if (evening.getTime() <= now.getTime()) {
+        evening = cloneAt(addDays(now, 1), 18, 0);
+    }
+    const options = [
+        {label: "1 小时后", value: toDateInputValue(inOneHour)},
+        {label: evening.getDate() === now.getDate() ? "今天 18:00" : "明天 18:00", value: toDateInputValue(evening)},
+        {label: "明天 09:00", value: toDateInputValue(cloneAt(addDays(now, 1), 9, 0))},
+        {label: "下周一 09:00", value: toDateInputValue(nextWeekdayAt(1, 9, 0, true))},
+        {label: "1 个月后", value: toDateInputValue(cloneAt(addMonths(now, 1), 9, 0))},
+        {label: "1 年后", value: toDateInputValue(cloneAt(addYears(now, 1), 9, 0))},
+    ];
+    const seen = new Set<string>();
+    return options.filter(option => {
+        if (seen.has(option.value)) {
+            return false;
+        }
+        seen.add(option.value);
+        return true;
+    });
+}
+
+const parseReminderDate = (value?: string) => {
+    if (!value) {
+        return null;
+    }
+    const date = new Date(value.replace(" ", "T"));
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+const sameDate = (left: Date, right: Date) => {
+    return left.getFullYear() === right.getFullYear()
+        && left.getMonth() === right.getMonth()
+        && left.getDate() === right.getDate();
+}
+
+const weekdayText = (date: Date) => ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][date.getDay()];
+
+const durationText = (milliseconds: number) => {
+    const minutes = Math.max(1, Math.floor(milliseconds / 60000));
+    if (minutes < 60) {
+        return `${minutes} 分钟`;
+    }
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) {
+        return `${hours} 小时`;
+    }
+    return `${Math.floor(hours / 24)} 天`;
+}
+
+const displayReminderTime = (value?: string, showOverdue = true) => {
+    const date = parseReminderDate(value);
+    if (!date) {
+        return "未设置提醒";
+    }
+    const now = new Date();
+    const time = `${padNumber(date.getHours())}:${padNumber(date.getMinutes())}`;
+    if (showOverdue && date.getTime() < now.getTime()) {
+        return `已逾期 ${durationText(now.getTime() - date.getTime())}`;
+    }
+    if (sameDate(now, date)) {
+        return `今天 ${time} 提醒`;
+    }
+    if (sameDate(addDays(now, 1), date)) {
+        return `明天 ${time} 提醒`;
+    }
+    if (date.getTime() - now.getTime() < 7 * 24 * 60 * 60 * 1000) {
+        return `${weekdayText(date)} ${time} 提醒`;
+    }
+    return `${date.getFullYear()}-${padNumber(date.getMonth() + 1)}-${padNumber(date.getDate())} ${time} 提醒`;
+}
+
+const reminderMetaText = (task: ReminderTask) => {
+    const repeat = repeatLabel(task.repeatType);
+    if (!task.emailNotify) {
+        return "仅记录";
+    }
+    if (repeat) {
+        return `${repeat} · ${displayReminderTime(task.dueAt)}`;
+    }
+    if (task.remindedAt) {
+        return `已发送 · ${displayReminderTime(task.dueAt, false).replace(" 提醒", "")}`;
+    }
+    return displayReminderTime(task.dueAt);
+}
+
+const repeatLabel = (repeatType?: string) => {
+    const matched = repeatOptions.find(option => option.value === repeatType);
+    return matched && matched.value !== "none" ? matched.label : "";
 }
 
 const isToday = (value?: string) => {
-    if (!value) {
+    const date = parseReminderDate(value);
+    if (!date) {
         return false;
     }
     const now = new Date();
-    const date = new Date(value.replace(" ", "T"));
-    return now.getFullYear() === date.getFullYear()
-        && now.getMonth() === date.getMonth()
-        && now.getDate() === date.getDate();
+    return sameDate(now, date);
 }
 
 const isOverdue = (task: ReminderTask) => {
-    if (!task.dueAt || task.status === "done") {
+    const date = parseReminderDate(task.dueAt);
+    if (!date || task.status === "done" || !task.emailNotify) {
         return false;
     }
-    return new Date(task.dueAt.replace(" ", "T")).getTime() < Date.now();
+    return date.getTime() < Date.now();
 }
 
 const priorityTag = (priority: ReminderPriority) => {
@@ -302,6 +447,98 @@ const EmptyText = styled.div<{ $token: any }>`
   color: ${props => props.$token.colorTextDisabled};
 `;
 
+const ReminderTimeBox = styled.div`
+  display: grid;
+  gap: 10px;
+`;
+
+const QuickTimeGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+
+  @media (max-width: 520px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`;
+
+const QuickTimeButton = styled(Button)`
+  width: 100%;
+`;
+
+const CustomTimeRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+
+  @media (max-width: 520px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const SelectedTimeText = styled.div<{ $token: any }>`
+  color: ${props => props.$token.colorTextDescription};
+  font-size: 13px;
+`;
+
+const AdvancedToggleRow = styled.div`
+  display: flex;
+  justify-content: flex-start;
+`;
+
+const AdvancedSettingsPanel = styled.div<{ $open: boolean; $token: any }>`
+  display: ${props => props.$open ? "grid" : "none"};
+  gap: 0;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid ${props => props.$token.colorBorderSecondary};
+`;
+
+const ReminderTimePicker: FunctionComponent<{
+    value?: string;
+    options: ReminderTimeOption[];
+    token: any;
+    onChange?: (value: string) => void;
+    onSelectTime?: () => void;
+    onClearTime?: () => void;
+}> = ({value, options, token, onChange, onSelectTime, onClearTime}) => {
+    const currentValue = value || "";
+    const change = (nextValue: string) => {
+        onChange?.(nextValue);
+        if (nextValue) {
+            onSelectTime?.();
+        } else {
+            onClearTime?.();
+        }
+    };
+    return (
+        <ReminderTimeBox>
+            <QuickTimeGrid>
+                {options.map(option => (
+                    <QuickTimeButton
+                        key={option.value}
+                        type={currentValue === option.value ? "primary" : "default"}
+                        onClick={() => change(option.value)}
+                    >
+                        {option.label}
+                    </QuickTimeButton>
+                ))}
+            </QuickTimeGrid>
+            <CustomTimeRow>
+                <Input
+                    type="datetime-local"
+                    value={currentValue}
+                    onChange={event => change(event.target.value)}
+                />
+                <Button onClick={() => change("")}>清除提醒</Button>
+            </CustomTimeRow>
+            <SelectedTimeText $token={token}>
+                已选：{displayReminderTime(currentValue, false)}
+            </SelectedTimeText>
+        </ReminderTimeBox>
+    );
+};
+
 const SummaryCard: FunctionComponent<{ label: string; value: number; token: any }> = ({label, value, token}) => (
     <SummaryCardContainer $token={token}>
         <SummaryLabel $token={token}>{label}</SummaryLabel>
@@ -318,6 +555,7 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
     const [editingTask, setEditingTask] = useState<ReminderTask | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
     const [channelModalOpen, setChannelModalOpen] = useState(false);
+    const [advancedOpen, setAdvancedOpen] = useState(false);
     const [notificationChannels, setNotificationChannels] = useState<ReminderNotificationChannels>(
         data.notificationChannels || defaultNotificationChannels()
     );
@@ -325,9 +563,10 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
     const [form] = Form.useForm<ReminderFormValues>();
     const [channelForm] = Form.useForm<NotificationChannelFormValues>();
     const [messageApi, contextHolder] = message.useMessage();
+    const reminderTimeOptions = useMemo(() => buildReminderTimeOptions(), [modalOpen]);
 
     const openTasks = useMemo(() => tasks.filter(task => task.status !== "done"), [tasks]);
-    const todayTasks = useMemo(() => tasks.filter(task => task.status !== "done" && isToday(task.dueAt)), [tasks]);
+    const todayTasks = useMemo(() => tasks.filter(task => task.status !== "done" && task.emailNotify && isToday(task.dueAt)), [tasks]);
     const overdueTasks = useMemo(() => tasks.filter(isOverdue), [tasks]);
     const doneTasks = useMemo(() => tasks.filter(task => task.status === "done"), [tasks]);
     const visibleTasks = useMemo(() => tasks.filter(task => {
@@ -335,7 +574,7 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
             return task.status === "done";
         }
         if (filter === "today") {
-            return task.status !== "done" && isToday(task.dueAt);
+            return task.status !== "done" && task.emailNotify && isToday(task.dueAt);
         }
         if (filter === "overdue") {
             return isOverdue(task);
@@ -376,13 +615,19 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
 
     const openModal = (task?: ReminderTask) => {
         setEditingTask(task || null);
+        setAdvancedOpen(Boolean(task?.note)
+            || (task?.repeatType || "none") !== "none"
+            || task?.priority === "high"
+            || task?.priority === "low"
+            || (Boolean(task?.dueAt) && !task?.emailNotify));
         form.setFieldsValue({
             id: task?.id || "",
             title: task?.title || "",
             note: task?.note || "",
             dueAt: toInputDate(task?.dueAt),
+            repeatType: task?.repeatType || "none",
             priority: task?.priority || "normal",
-            emailNotify: task?.emailNotify ?? true,
+            emailNotify: task?.emailNotify ?? false,
         });
         setModalOpen(true);
     }
@@ -390,6 +635,7 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
     const closeModal = () => {
         setModalOpen(false);
         setEditingTask(null);
+        setAdvancedOpen(false);
         form.resetFields();
     }
 
@@ -452,11 +698,18 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
     const save = async () => {
         const values = await form.validateFields();
         try {
+            if (values.emailNotify && !values.dueAt) {
+                throw new Error("请选择提醒时间，或关闭通知提醒");
+            }
+            if (values.repeatType !== "none" && (!values.emailNotify || !values.dueAt)) {
+                throw new Error("重复提醒需要设置提醒时间");
+            }
             await request<ReminderTask>("save", {
                 id: values.id || "",
                 title: values.title,
                 note: values.note || "",
                 dueAt: values.dueAt || "",
+                repeatType: values.repeatType || "none",
                 priority: values.priority || "normal",
                 status: editingTask?.status || "todo",
                 emailNotify: values.emailNotify ? "true" : "false",
@@ -536,8 +789,7 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
                                 <TaskTitle $done={task.status === "done"} $token={token}>{task.title}</TaskTitle>
                             </TaskHead>
                             <TaskMeta $token={token}>
-                                <span>截止：{displayDate(task.dueAt)}</span>
-                                <span>通知：{task.emailNotify ? (task.remindedAt ? "已发送" : "待发送") : "关闭"}</span>
+                                <span>{reminderMetaText(task)}</span>
                                 {priorityTag(task.priority)}
                                 {statusTag(task)}
                             </TaskMeta>
@@ -569,18 +821,56 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
                     <Form.Item label="标题" name="title" rules={[{required: true, message: "请输入标题"}]}>
                         <Input maxLength={80} placeholder="例如：整理下周发布计划"/>
                     </Form.Item>
-                    <Form.Item label="截止时间" name="dueAt">
-                        <Input type="datetime-local"/>
+                    <Form.Item label="提醒时间" name="dueAt">
+                        <ReminderTimePicker
+                            options={reminderTimeOptions}
+                            token={token}
+                            onSelectTime={() => form.setFieldValue("emailNotify", true)}
+                            onClearTime={() => {
+                                form.setFieldValue("emailNotify", false);
+                                form.setFieldValue("repeatType", "none");
+                            }}
+                        />
                     </Form.Item>
-                    <Form.Item label="优先级" name="priority">
-                        <Select options={priorityOptions}/>
-                    </Form.Item>
-                    <Form.Item label="备注" name="note">
-                        <Input.TextArea rows={4} maxLength={500}/>
-                    </Form.Item>
-                    <Form.Item name="emailNotify" valuePropName="checked">
-                        <Switch checkedChildren="通知提醒" unCheckedChildren="仅记录"/>
-                    </Form.Item>
+                    <AdvancedToggleRow>
+                        <Button
+                            type="link"
+                            size="small"
+                            icon={<SettingOutlined/>}
+                            onClick={() => setAdvancedOpen(open => !open)}
+                        >
+                            {advancedOpen ? "收起设置" : "更多设置"}
+                        </Button>
+                    </AdvancedToggleRow>
+                    <AdvancedSettingsPanel $open={advancedOpen} $token={token}>
+                        <Form.Item label="重复提醒" name="repeatType">
+                            <Select
+                                options={repeatOptions}
+                                onChange={value => {
+                                    if (value !== "none") {
+                                        form.setFieldValue("emailNotify", true);
+                                    }
+                                }}
+                            />
+                        </Form.Item>
+                        <Form.Item label="优先级" name="priority">
+                            <Select options={priorityOptions}/>
+                        </Form.Item>
+                        <Form.Item label="备注" name="note">
+                            <Input.TextArea rows={4} maxLength={500}/>
+                        </Form.Item>
+                        <Form.Item label="通知" name="emailNotify" valuePropName="checked">
+                            <Switch
+                                checkedChildren="通知提醒"
+                                unCheckedChildren="仅记录"
+                                onChange={checked => {
+                                    if (!checked) {
+                                        form.setFieldValue("repeatType", "none");
+                                    }
+                                }}
+                            />
+                        </Form.Item>
+                    </AdvancedSettingsPanel>
                 </Form>
             </Modal>
 

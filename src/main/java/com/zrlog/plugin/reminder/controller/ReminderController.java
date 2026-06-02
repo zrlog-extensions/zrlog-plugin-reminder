@@ -18,6 +18,7 @@ import com.zrlog.plugin.reminder.service.ReminderScheduler;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -72,9 +73,14 @@ public class ReminderController {
             }
             task.setNote(stringValue(values.get("note")));
             task.setDueAt(stringValue(values.get("dueAt")));
-            task.setPriority("normal");
+            task.setRepeatType(stringValue(values.get("repeatType")));
+            task.setPriority(stringValue(values.get("priority")));
             task.setStatus("todo");
-            task.setEmailNotify(booleanValue(values.get("emailNotify")));
+            task.setEmailNotify(ReminderRepository.notBlank(task.getDueAt()) && !booleanValue(values.get("recordOnly")));
+            if (!validReminderTime(task)) {
+                response(errorMap(reminderTimeError(task)));
+                return;
+            }
             repository.save(session, task);
             message = "已新建待办";
         } else if ("reminder:remindNow".equals(actionRef)) {
@@ -165,9 +171,14 @@ public class ReminderController {
         task.setTitle(title.trim());
         task.setNote(stringValue(params.get("note")));
         task.setDueAt(stringValue(params.get("dueAt")));
+        task.setRepeatType(stringValue(params.get("repeatType")));
         task.setPriority(stringValue(params.get("priority")));
         task.setStatus(stringValue(params.get("status")));
         task.setEmailNotify(booleanValue(params.get("emailNotify")));
+        if (!validReminderTime(task)) {
+            response(errorMap(reminderTimeError(task)));
+            return;
+        }
         response(successMap(repository.save(session, task)));
     }
 
@@ -248,12 +259,14 @@ public class ReminderController {
                 continue;
             }
             open++;
-            long dueAt = ReminderRepository.parseTime(task.getDueAt(), Long.MAX_VALUE);
-            if (dueAt < System.currentTimeMillis()) {
-                overdue++;
-            }
-            if (isToday(task.getDueAt())) {
-                today++;
+            if (task.isEmailNotify()) {
+                long dueAt = ReminderRepository.parseTime(task.getDueAt(), Long.MAX_VALUE);
+                if (dueAt < System.currentTimeMillis()) {
+                    overdue++;
+                }
+                if (isToday(task.getDueAt())) {
+                    today++;
+                }
             }
         }
         Map<String, Object> surface = new HashMap<>();
@@ -293,8 +306,9 @@ public class ReminderController {
         Map<String, Object> item = new HashMap<>();
         item.put("id", task.getId());
         item.put("title", task.getTitle());
-        item.put("description", ReminderRepository.notBlank(task.getDueAt()) ? task.getDueAt().substring(0, Math.min(16, task.getDueAt().length())) : "未设置截止时间");
-        item.put("status", ReminderRepository.parseTime(task.getDueAt(), Long.MAX_VALUE) < System.currentTimeMillis() ? "warning" : "normal");
+        item.put("description", reminderTimeText(task));
+        item.put("status", task.isEmailNotify()
+                && ReminderRepository.parseTime(task.getDueAt(), Long.MAX_VALUE) < System.currentTimeMillis() ? "warning" : "normal");
         List<Map<String, Object>> actions = new ArrayList<>();
         actions.add(actionMap("完成", "reminder:complete:" + task.getId(), "primary"));
         actions.add(actionMap("删除", "reminder:delete:" + task.getId(), "danger"));
@@ -306,9 +320,11 @@ public class ReminderController {
         Map<String, Object> action = actionMap("新建待办", "reminder:create", "primary");
         List<Map<String, Object>> form = new ArrayList<>();
         form.add(fieldMap("title", "标题", "input", true, "例如：整理下周发布计划"));
-        form.add(fieldMap("dueAt", "截止时间", "datetime", false, ""));
+        form.add(fieldMap("dueAt", "提醒时间", "datetime", false, ""));
+        form.add(fieldMap("repeatType", "重复提醒", "select", false, "", repeatOptions()));
+        form.add(fieldMap("priority", "优先级", "select", false, "", priorityOptions()));
         form.add(fieldMap("note", "备注", "textarea", false, ""));
-        form.add(fieldMap("emailNotify", "通知提醒", "switch", false, ""));
+        form.add(fieldMap("recordOnly", "仅记录", "switch", false, ""));
         action.put("form", form);
         return action;
     }
@@ -339,6 +355,42 @@ public class ReminderController {
         return map;
     }
 
+    private Map<String, Object> fieldMap(String name,
+                                         String label,
+                                         String type,
+                                         boolean required,
+                                         String placeholder,
+                                         List<Map<String, String>> options) {
+        Map<String, Object> map = fieldMap(name, label, type, required, placeholder);
+        map.put("options", options);
+        return map;
+    }
+
+    private List<Map<String, String>> repeatOptions() {
+        List<Map<String, String>> options = new ArrayList<>();
+        options.add(optionMap("不重复", "none"));
+        options.add(optionMap("每天", "daily"));
+        options.add(optionMap("每周", "weekly"));
+        options.add(optionMap("每月", "monthly"));
+        options.add(optionMap("每年", "yearly"));
+        return options;
+    }
+
+    private List<Map<String, String>> priorityOptions() {
+        List<Map<String, String>> options = new ArrayList<>();
+        options.add(optionMap("高", "high"));
+        options.add(optionMap("普通", "normal"));
+        options.add(optionMap("低", "low"));
+        return options;
+    }
+
+    private Map<String, String> optionMap(String label, String value) {
+        Map<String, String> map = new HashMap<>();
+        map.put("label", label);
+        map.put("value", value);
+        return map;
+    }
+
     private Map<String, Object> viewMap(String label, String view, String url) {
         Map<String, Object> map = new HashMap<>();
         map.put("label", label);
@@ -354,6 +406,84 @@ public class ReminderController {
         }
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
         return Objects.equals(dateFormat.format(new Date(time)), dateFormat.format(new Date()));
+    }
+
+    private boolean isTomorrow(long time) {
+        Calendar tomorrow = Calendar.getInstance();
+        tomorrow.add(Calendar.DATE, 1);
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+        return Objects.equals(dateFormat.format(new Date(time)), dateFormat.format(tomorrow.getTime()));
+    }
+
+    private String reminderTimeText(ReminderTask task) {
+        if (!task.isEmailNotify()) {
+            return "仅记录";
+        }
+        long time = ReminderRepository.parseTime(task.getDueAt(), -1);
+        if (time < 0) {
+            return "未设置提醒";
+        }
+        long now = System.currentTimeMillis();
+        if (time < now) {
+            return repeatPrefix(task) + "已逾期 " + durationText(now - time);
+        }
+        SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm");
+        if (isToday(task.getDueAt())) {
+            return repeatPrefix(task) + "今天 " + timeFormat.format(new Date(time)) + " 提醒";
+        }
+        if (isTomorrow(time)) {
+            return repeatPrefix(task) + "明天 " + timeFormat.format(new Date(time)) + " 提醒";
+        }
+        return repeatPrefix(task) + task.getDueAt().substring(0, Math.min(16, task.getDueAt().length())) + " 提醒";
+    }
+
+    private String durationText(long milliseconds) {
+        long minutes = Math.max(1, milliseconds / 60000);
+        if (minutes < 60) {
+            return minutes + " 分钟";
+        }
+        long hours = minutes / 60;
+        if (hours < 24) {
+            return hours + " 小时";
+        }
+        return (hours / 24) + " 天";
+    }
+
+    private boolean validReminderTime(ReminderTask task) {
+        boolean recurring = ReminderRepository.isRecurring(task.getRepeatType());
+        if (recurring && !task.isEmailNotify()) {
+            return false;
+        }
+        return (!task.isEmailNotify() && !recurring) || ReminderRepository.notBlank(task.getDueAt());
+    }
+
+    private String reminderTimeError(ReminderTask task) {
+        if (ReminderRepository.isRecurring(task.getRepeatType())) {
+            return "重复提醒需要设置提醒时间";
+        }
+        return "请选择提醒时间，或关闭通知提醒";
+    }
+
+    private String repeatPrefix(ReminderTask task) {
+        String label = repeatLabel(task.getRepeatType());
+        return ReminderRepository.notBlank(label) ? label + " · " : "";
+    }
+
+    private String repeatLabel(String repeatType) {
+        String normalized = ReminderRepository.normalizeRepeatType(repeatType);
+        if (Objects.equals("daily", normalized)) {
+            return "每天";
+        }
+        if (Objects.equals("weekly", normalized)) {
+            return "每周";
+        }
+        if (Objects.equals("monthly", normalized)) {
+            return "每月";
+        }
+        if (Objects.equals("yearly", normalized)) {
+            return "每年";
+        }
+        return "";
     }
 
     private Map<String, Object> params() {

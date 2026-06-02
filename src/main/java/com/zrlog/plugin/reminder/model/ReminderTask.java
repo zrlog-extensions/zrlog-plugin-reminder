@@ -6,6 +6,7 @@ public class ReminderTask {
     private String title;
     private String note;
     private String dueAt;
+    private String repeatType;
     private String priority;
     private String status;
     private boolean emailNotify;
@@ -44,6 +45,14 @@ public class ReminderTask {
 
     public void setDueAt(String dueAt) {
         this.dueAt = dueAt;
+    }
+
+    public String getRepeatType() {
+        return repeatType;
+    }
+
+    public void setRepeatType(String repeatType) {
+        this.repeatType = repeatType;
     }
 
     public String getPriority() {

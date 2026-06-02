@@ -10,6 +10,7 @@ import com.zrlog.plugin.reminder.model.ReminderTask;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
@@ -26,6 +27,11 @@ public class ReminderRepository {
     private static final Logger LOGGER = LoggerUtil.getLogger(ReminderRepository.class);
     private static final ReminderRepository INSTANCE = new ReminderRepository();
     private static final String STORE_KEY = "reminderTasks";
+    private static final String REPEAT_NONE = "none";
+    private static final String REPEAT_DAILY = "daily";
+    private static final String REPEAT_WEEKLY = "weekly";
+    private static final String REPEAT_MONTHLY = "monthly";
+    private static final String REPEAT_YEARLY = "yearly";
     private final Gson gson = new Gson();
 
     public static ReminderRepository getInstance() {
@@ -66,10 +72,20 @@ public class ReminderRepository {
         }
         task.setTitle(input.getTitle());
         task.setNote(input.getNote());
-        task.setDueAt(normalizeDueAt(input.getDueAt()));
+        String previousDueAt = task.getDueAt();
+        String previousRepeatType = task.getRepeatType();
+        String normalizedDueAt = normalizeDueAt(input.getDueAt());
+        String normalizedRepeatType = normalizeRepeatType(input.getRepeatType());
+        task.setDueAt(normalizedDueAt);
+        task.setRepeatType(normalizedRepeatType);
         task.setPriority(notBlank(input.getPriority()) ? input.getPriority() : "normal");
         task.setStatus(notBlank(input.getStatus()) ? input.getStatus() : "todo");
         task.setEmailNotify(input.isEmailNotify());
+        if (!input.isEmailNotify()
+                || !Objects.equals(previousDueAt, normalizedDueAt)
+                || !Objects.equals(normalizeRepeatType(previousRepeatType), normalizedRepeatType)) {
+            task.setRemindedAt(null);
+        }
         task.setUpdatedAt(now);
         if (!Objects.equals(task.getStatus(), "done")) {
             task.setCompletedAt(null);
@@ -107,8 +123,13 @@ public class ReminderRepository {
         ReminderStore store = readStore(session);
         ReminderTask task = find(store.getTasks(), id);
         if (task != null) {
-            task.setRemindedAt(now());
-            task.setUpdatedAt(task.getRemindedAt());
+            String nowText = now();
+            task.setRemindedAt(nowText);
+            String nextDueAt = nextDueAt(task.getDueAt(), task.getRepeatType(), System.currentTimeMillis());
+            if (notBlank(nextDueAt)) {
+                task.setDueAt(nextDueAt);
+            }
+            task.setUpdatedAt(nowText);
             writeStore(session, store);
         }
     }
@@ -116,7 +137,10 @@ public class ReminderRepository {
     public synchronized List<ReminderTask> dueTasks(IOSession session, long now) {
         List<ReminderTask> dueTasks = new ArrayList<>();
         for (ReminderTask task : readStore(session).getTasks()) {
-            if (!task.isEmailNotify() || Objects.equals(task.getStatus(), "done") || notBlank(task.getRemindedAt())) {
+            if (!task.isEmailNotify() || Objects.equals(task.getStatus(), "done")) {
+                continue;
+            }
+            if (!isRecurring(task.getRepeatType()) && notBlank(task.getRemindedAt())) {
                 continue;
             }
             long dueAt = parseTime(task.getDueAt(), Long.MAX_VALUE);
@@ -154,6 +178,45 @@ public class ReminderRepository {
         return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
     }
 
+    public static String normalizeRepeatType(String value) {
+        if (REPEAT_DAILY.equals(value) || REPEAT_WEEKLY.equals(value)
+                || REPEAT_MONTHLY.equals(value) || REPEAT_YEARLY.equals(value)) {
+            return value;
+        }
+        return REPEAT_NONE;
+    }
+
+    public static boolean isRecurring(String repeatType) {
+        return !REPEAT_NONE.equals(normalizeRepeatType(repeatType));
+    }
+
+    public static String nextDueAt(String dueAt, String repeatType, long now) {
+        String normalizedRepeatType = normalizeRepeatType(repeatType);
+        if (REPEAT_NONE.equals(normalizedRepeatType)) {
+            return "";
+        }
+        Date dueDate = parseDate(dueAt);
+        if (dueDate == null) {
+            return "";
+        }
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(dueDate);
+        int guard = 0;
+        while (calendar.getTimeInMillis() <= now && guard < 10000) {
+            if (REPEAT_DAILY.equals(normalizedRepeatType)) {
+                calendar.add(Calendar.DATE, 1);
+            } else if (REPEAT_WEEKLY.equals(normalizedRepeatType)) {
+                calendar.add(Calendar.WEEK_OF_YEAR, 1);
+            } else if (REPEAT_MONTHLY.equals(normalizedRepeatType)) {
+                calendar.add(Calendar.MONTH, 1);
+            } else if (REPEAT_YEARLY.equals(normalizedRepeatType)) {
+                calendar.add(Calendar.YEAR, 1);
+            }
+            guard++;
+        }
+        return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(calendar.getTime());
+    }
+
     private ReminderTask find(List<ReminderTask> tasks, String id) {
         if (!notBlank(id)) {
             return null;
@@ -164,6 +227,21 @@ public class ReminderRepository {
             }
         }
         return null;
+    }
+
+    private static Date parseDate(String value) {
+        if (!notBlank(value)) {
+            return null;
+        }
+        String normalized = value.trim().replace("T", " ");
+        if (normalized.length() == 16) {
+            normalized = normalized + ":00";
+        }
+        try {
+            return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(normalized);
+        } catch (ParseException e) {
+            return null;
+        }
     }
 
     private ReminderStore readStore(IOSession session) {

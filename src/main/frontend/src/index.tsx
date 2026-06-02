@@ -10,12 +10,14 @@ const {darkAlgorithm, defaultAlgorithm} = theme;
 
 export type ReminderPriority = "high" | "normal" | "low";
 export type ReminderStatus = "todo" | "done";
+export type ReminderRepeatType = "none" | "daily" | "weekly" | "monthly" | "yearly";
 
 export interface ReminderTask {
     id: string;
     title: string;
     note?: string;
     dueAt?: string;
+    repeatType?: ReminderRepeatType;
     priority: ReminderPriority;
     status: ReminderStatus;
     emailNotify: boolean;
