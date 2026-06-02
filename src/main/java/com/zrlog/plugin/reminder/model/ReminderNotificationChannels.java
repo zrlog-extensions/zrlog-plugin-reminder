@@ -6,13 +6,14 @@ import java.util.List;
 
 public class ReminderNotificationChannels {
 
-    public static final String STORE_KEY = "plugin.reminder.notification.channels";
-    public static final String SCHEMA = STORE_KEY;
+    public static final String DEFAULT_CHANNELS_KEY = "notificationDefaultChannels";
+    public static final String IMPORTANT_CHANNELS_KEY = "notificationImportantChannels";
+    public static final String FAILED_CHANNELS_KEY = "notificationFailedChannels";
     private static final List<String> FALLBACK_CHANNELS = Arrays.asList("email");
 
-    private String schema = SCHEMA;
-    private int version = 1;
-    private ReminderNotificationChannelData data = new ReminderNotificationChannelData();
+    private List<String> defaultChannels = new ArrayList<String>(FALLBACK_CHANNELS);
+    private List<String> importantChannels = new ArrayList<String>(FALLBACK_CHANNELS);
+    private List<String> failedChannels = new ArrayList<String>(FALLBACK_CHANNELS);
 
     public static ReminderNotificationChannels defaults() {
         return normalize(new ReminderNotificationChannels());
@@ -20,27 +21,29 @@ public class ReminderNotificationChannels {
 
     public static ReminderNotificationChannels normalize(ReminderNotificationChannels channels) {
         ReminderNotificationChannels normalized = channels == null ? new ReminderNotificationChannels() : channels;
-        normalized.setSchema(SCHEMA);
-        if (normalized.getVersion() <= 0) {
-            normalized.setVersion(1);
-        }
-        ReminderNotificationChannelData data = normalized.getData();
-        if (data == null) {
-            data = new ReminderNotificationChannelData();
-            normalized.setData(data);
-        }
-        data.setDefaultChannels(normalizeChannels(data.getDefaultChannels(), FALLBACK_CHANNELS));
-        data.setImportantChannels(normalizeChannels(data.getImportantChannels(), data.getDefaultChannels()));
-        data.setFailedChannels(normalizeChannels(data.getFailedChannels(), data.getDefaultChannels()));
+        normalized.setDefaultChannels(normalizeChannels(normalized.getDefaultChannels(), FALLBACK_CHANNELS));
+        normalized.setImportantChannels(normalizeChannels(normalized.getImportantChannels(), normalized.getDefaultChannels()));
+        normalized.setFailedChannels(normalizeChannels(normalized.getFailedChannels(), normalized.getDefaultChannels()));
         return normalized;
     }
 
     public List<String> channelsFor(ReminderTask task) {
         ReminderNotificationChannels normalized = normalize(this);
         if (task != null && "high".equals(task.getPriority())) {
-            return copy(normalized.getData().getImportantChannels());
+            return copy(normalized.getImportantChannels());
         }
-        return copy(normalized.getData().getDefaultChannels());
+        return copy(normalized.getDefaultChannels());
+    }
+
+    public static List<String> decodeChannels(String text, List<String> fallback) {
+        if (text == null || text.trim().isEmpty()) {
+            return normalizeChannels(null, fallback);
+        }
+        return normalizeChannels(Arrays.asList(text.split(",")), fallback);
+    }
+
+    public static String encodeChannels(List<String> channels) {
+        return String.join(",", normalizeChannels(channels, FALLBACK_CHANNELS));
     }
 
     private static List<String> normalizeChannels(List<String> channels, List<String> fallback) {
@@ -66,57 +69,27 @@ public class ReminderNotificationChannels {
         return new ArrayList<String>(values == null || values.isEmpty() ? FALLBACK_CHANNELS : values);
     }
 
-    public String getSchema() {
-        return schema;
+    public List<String> getDefaultChannels() {
+        return defaultChannels;
     }
 
-    public void setSchema(String schema) {
-        this.schema = schema;
+    public void setDefaultChannels(List<String> defaultChannels) {
+        this.defaultChannels = defaultChannels;
     }
 
-    public int getVersion() {
-        return version;
+    public List<String> getImportantChannels() {
+        return importantChannels;
     }
 
-    public void setVersion(int version) {
-        this.version = version;
+    public void setImportantChannels(List<String> importantChannels) {
+        this.importantChannels = importantChannels;
     }
 
-    public ReminderNotificationChannelData getData() {
-        return data;
+    public List<String> getFailedChannels() {
+        return failedChannels;
     }
 
-    public void setData(ReminderNotificationChannelData data) {
-        this.data = data;
-    }
-
-    public static class ReminderNotificationChannelData {
-        private List<String> defaultChannels = new ArrayList<String>(FALLBACK_CHANNELS);
-        private List<String> importantChannels = new ArrayList<String>(FALLBACK_CHANNELS);
-        private List<String> failedChannels = new ArrayList<String>(FALLBACK_CHANNELS);
-
-        public List<String> getDefaultChannels() {
-            return defaultChannels;
-        }
-
-        public void setDefaultChannels(List<String> defaultChannels) {
-            this.defaultChannels = defaultChannels;
-        }
-
-        public List<String> getImportantChannels() {
-            return importantChannels;
-        }
-
-        public void setImportantChannels(List<String> importantChannels) {
-            this.importantChannels = importantChannels;
-        }
-
-        public List<String> getFailedChannels() {
-            return failedChannels;
-        }
-
-        public void setFailedChannels(List<String> failedChannels) {
-            this.failedChannels = failedChannels;
-        }
+    public void setFailedChannels(List<String> failedChannels) {
+        this.failedChannels = failedChannels;
     }
 }

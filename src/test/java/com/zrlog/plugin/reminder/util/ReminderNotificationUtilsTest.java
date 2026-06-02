@@ -14,10 +14,7 @@ public class ReminderNotificationUtilsTest {
     @Test
     public void shouldCreateNotificationRequestWithConfiguredChannels() {
         ReminderNotificationChannels channels = new ReminderNotificationChannels();
-        ReminderNotificationChannels.ReminderNotificationChannelData data =
-                new ReminderNotificationChannels.ReminderNotificationChannelData();
-        data.setDefaultChannels(Arrays.asList("email", "webhook"));
-        channels.setData(data);
+        channels.setDefaultChannels(Arrays.asList("email", "webhook"));
 
         ReminderTask task = new ReminderTask();
         task.setId("task-1");

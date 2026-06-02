@@ -19,11 +19,8 @@ public class ReminderNotificationChannelsTest {
     @Test
     public void shouldUseConfiguredDefaultChannels() {
         ReminderNotificationChannels channels = new ReminderNotificationChannels();
-        ReminderNotificationChannels.ReminderNotificationChannelData data =
-                new ReminderNotificationChannels.ReminderNotificationChannelData();
-        data.setDefaultChannels(Arrays.asList("email", "webhook"));
-        data.setImportantChannels(null);
-        channels.setData(data);
+        channels.setDefaultChannels(Arrays.asList("email", "webhook"));
+        channels.setImportantChannels(null);
 
         ReminderTask task = new ReminderTask();
         task.setPriority("normal");
@@ -35,11 +32,8 @@ public class ReminderNotificationChannelsTest {
     @Test
     public void shouldUseImportantChannelsForHighPriorityTask() {
         ReminderNotificationChannels channels = new ReminderNotificationChannels();
-        ReminderNotificationChannels.ReminderNotificationChannelData data =
-                new ReminderNotificationChannels.ReminderNotificationChannelData();
-        data.setDefaultChannels(Arrays.asList("email"));
-        data.setImportantChannels(Arrays.asList("email", "sms"));
-        channels.setData(data);
+        channels.setDefaultChannels(Arrays.asList("email"));
+        channels.setImportantChannels(Arrays.asList("email", "sms"));
 
         ReminderTask task = new ReminderTask();
         task.setPriority("high");

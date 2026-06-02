@@ -20,8 +20,7 @@ public class GraalvmAgentApplication {
         RunConstants.runType = RunType.AGENT;
         PluginNativeImageUtils.usedGsonObject();
         PluginNativeImageUtils.gsonNativeAgentByClazz(Arrays.asList(ReminderStore.class, ReminderTask.class,
-                ReminderNotificationChannels.class,
-                ReminderNotificationChannels.ReminderNotificationChannelData.class));
+                ReminderNotificationChannels.class));
         warmupServiceReflection();
         String basePath = System.getProperty("user.dir").replace("\\target", "").replace("/target", "");
         File file = new File(basePath + "/src/main/resources");

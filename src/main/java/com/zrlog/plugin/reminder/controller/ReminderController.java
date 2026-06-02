@@ -2,10 +2,13 @@ package com.zrlog.plugin.reminder.controller;
 
 import com.google.gson.Gson;
 import com.zrlog.plugin.IOSession;
+import com.zrlog.plugin.common.SessionNotificationChannelRepository;
 import com.zrlog.plugin.data.codec.ContentType;
 import com.zrlog.plugin.data.codec.HttpRequestInfo;
 import com.zrlog.plugin.data.codec.MsgPacket;
 import com.zrlog.plugin.data.codec.MsgPacketStatus;
+import com.zrlog.plugin.message.NotificationChannelProvider;
+import com.zrlog.plugin.message.NotificationChannelQueryResult;
 import com.zrlog.plugin.reminder.model.ReminderNotificationChannels;
 import com.zrlog.plugin.reminder.model.ReminderTask;
 import com.zrlog.plugin.reminder.service.ReminderNotificationSettingRepository;
@@ -118,7 +121,7 @@ public class ReminderController {
 
     public void saveNotificationChannels() {
         Map<String, Object> params = params();
-        List providers;
+        List<NotificationChannelProvider> providers;
         try {
             providers = queryNotificationProviders();
         } catch (Exception e) {
@@ -140,12 +143,9 @@ public class ReminderController {
             failedChannels = defaultChannels;
         }
         ReminderNotificationChannels channels = new ReminderNotificationChannels();
-        ReminderNotificationChannels.ReminderNotificationChannelData data =
-                new ReminderNotificationChannels.ReminderNotificationChannelData();
-        data.setDefaultChannels(defaultChannels);
-        data.setImportantChannels(importantChannels);
-        data.setFailedChannels(failedChannels);
-        channels.setData(data);
+        channels.setDefaultChannels(defaultChannels);
+        channels.setImportantChannels(importantChannels);
+        channels.setFailedChannels(failedChannels);
         notificationSettingRepository.save(session, channels);
         Map<String, Object> result = new HashMap<>();
         result.put("settings", notificationSettingRepository.get(session));
@@ -209,44 +209,18 @@ public class ReminderController {
         return data;
     }
 
-    private List queryNotificationProviders() {
-        int msgId = session.queryNotificationChannels(null);
-        MsgPacket response = session.getResponseMsgPacketByMsgId(msgId, Duration.ofSeconds(15));
-        if (response == null) {
-            throw new IllegalStateException("通知渠道查询超时");
+    private List<NotificationChannelProvider> queryNotificationProviders() {
+        NotificationChannelQueryResult result = SessionNotificationChannelRepository.of(session).query(Duration.ofSeconds(15));
+        if (!result.isOk()) {
+            throw new IllegalStateException(stringValue(result.getMessage()));
         }
-        Map result = gson.fromJson(response.getDataStr(), Map.class);
-        if (response.getStatus() != MsgPacketStatus.RESPONSE_SUCCESS
-                || result == null
-                || Boolean.FALSE.equals(result.get("success"))
-                || numberValue(result.get("code")) > 0) {
-            throw new IllegalStateException(stringValue(result == null ? null : result.get("message")));
-        }
-        Object items = result.get("items");
-        if (items instanceof List) {
-            return (List) items;
-        }
-        return new ArrayList();
+        return result.getItems();
     }
 
-    private int numberValue(Object value) {
-        if (value instanceof Number) {
-            return ((Number) value).intValue();
-        }
-        try {
-            return Integer.parseInt(stringValue(value));
-        } catch (Exception e) {
-            return 0;
-        }
-    }
-
-    private Set<String> availableChannels(List providers) {
+    private Set<String> availableChannels(List<NotificationChannelProvider> providers) {
         Set<String> channels = new LinkedHashSet<>();
-        for (Object item : providers) {
-            if (!(item instanceof Map)) {
-                continue;
-            }
-            String channel = stringValue(((Map) item).get("channel"));
+        for (NotificationChannelProvider item : providers) {
+            String channel = item == null ? "" : item.getChannel();
             if (ReminderRepository.notBlank(channel)) {
                 channels.add(channel);
             }

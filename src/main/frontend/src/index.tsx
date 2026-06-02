@@ -26,13 +26,9 @@ export interface ReminderTask {
 }
 
 export interface ReminderNotificationChannels {
-    schema: string;
-    version: number;
-    data: {
-        defaultChannels: string[];
-        importantChannels: string[];
-        failedChannels: string[];
-    };
+    defaultChannels: string[];
+    importantChannels: string[];
+    failedChannels: string[];
 }
 
 export interface NotificationProviderRow {

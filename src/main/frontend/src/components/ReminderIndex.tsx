@@ -89,13 +89,9 @@ const fetchNotificationChannelInfo = async () => {
 }
 
 const defaultNotificationChannels = (): ReminderNotificationChannels => ({
-    schema: "plugin.reminder.notification.channels",
-    version: 1,
-    data: {
-        defaultChannels: ["email"],
-        importantChannels: ["email"],
-        failedChannels: ["email"],
-    },
+    defaultChannels: ["email"],
+    importantChannels: ["email"],
+    failedChannels: ["email"],
 });
 
 const toInputDate = (value?: string) => {
@@ -404,9 +400,9 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
             setNotificationChannels(info.settings || defaultNotificationChannels());
             setNotificationProviders(info.providers || []);
             const values = new Set((info.providers || []).map(row => row.channel).filter(Boolean));
-            const defaultChannels = (info.settings?.data?.defaultChannels || []).filter(channel => values.has(channel));
-            const importantChannels = (info.settings?.data?.importantChannels || []).filter(channel => values.has(channel));
-            const failedChannels = (info.settings?.data?.failedChannels || []).filter(channel => values.has(channel));
+            const defaultChannels = (info.settings?.defaultChannels || []).filter(channel => values.has(channel));
+            const importantChannels = (info.settings?.importantChannels || []).filter(channel => values.has(channel));
+            const failedChannels = (info.settings?.failedChannels || []).filter(channel => values.has(channel));
             channelForm.setFieldsValue({
                 defaultChannels,
                 importantChannels: importantChannels.length > 0 ? importantChannels : defaultChannels,
@@ -422,9 +418,9 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
     const openChannelModal = () => {
         const channels = notificationChannels || defaultNotificationChannels();
         channelForm.setFieldsValue({
-            defaultChannels: filterAvailableChannels(channels.data.defaultChannels),
-            importantChannels: filterAvailableChannels(channels.data.importantChannels),
-            failedChannels: filterAvailableChannels(channels.data.failedChannels),
+            defaultChannels: filterAvailableChannels(channels.defaultChannels),
+            importantChannels: filterAvailableChannels(channels.importantChannels),
+            failedChannels: filterAvailableChannels(channels.failedChannels),
         });
         setChannelModalOpen(true);
         loadNotificationChannels();
