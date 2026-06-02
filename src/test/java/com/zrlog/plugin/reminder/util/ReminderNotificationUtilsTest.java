@@ -27,5 +27,6 @@ public class ReminderNotificationUtilsTest {
         assertEquals("reminder.scanDueTasks", request.getSourceCapabilityKey());
         assertEquals("reminder.due", request.getEventType());
         assertEquals("reminder", request.getNotificationType());
+        assertEquals("[待办提醒] Release", request.getTitle());
     }
 }

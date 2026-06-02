@@ -757,7 +757,7 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
             <TopBar>
                 <div>
                     <Title>待办提醒</Title>
-                    <SubTitle $token={token}>记录待办、标记进度，到期后通过 ZrLog 通知渠道发送提醒</SubTitle>
+                    <SubTitle $token={token}>记录待办、标记进度，到期后通过通知渠道发送提醒</SubTitle>
                 </div>
                 <Space wrap>
                     <Button onClick={load} loading={loading}>刷新</Button>

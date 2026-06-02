@@ -43,7 +43,7 @@ public class ReminderNotificationUtils {
         request.setEventType("reminder.due");
         request.setNotificationType("reminder");
         request.setChannels(ReminderNotificationChannels.normalize(channels).channelsFor(task));
-        request.setTitle("[ZrLog Reminder] " + task.getTitle());
+        request.setTitle("[待办提醒] " + task.getTitle());
         request.setContent(TEMPLATE_RENDER.render("/notification/reminder-due", null, templateData(task)));
         request.setLevel(level(task.getPriority()));
         request.setPayload(payload(task));
