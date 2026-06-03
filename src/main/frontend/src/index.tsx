@@ -1,5 +1,5 @@
 import {legacyLogicalPropertiesTransformer, StyleProvider} from "@ant-design/cssinjs";
-import {App, ConfigProvider, theme} from "antd";
+import {App, ConfigProvider, Layout, theme} from "antd";
 import zhCN from "antd/es/locale/zh_CN";
 import {useEffect, useState} from "react";
 import {createRoot} from "react-dom/client";
@@ -7,6 +7,7 @@ import axios from "axios";
 import AppBase from "./AppBase";
 
 const {darkAlgorithm, defaultAlgorithm} = theme;
+const {Content} = Layout;
 
 export type ReminderPriority = "high" | "normal" | "low";
 export type ReminderStatus = "todo" | "done";
@@ -118,9 +119,11 @@ const Index = () => {
             }}
         >
             <StyleProvider transformers={[legacyLogicalPropertiesTransformer]}>
-                <App>
-                    <AppBase pluginInfo={response.data}/>
-                </App>
+                <Content>
+                    <App>
+                        <AppBase pluginInfo={response.data}/>
+                    </App>
+                </Content>
             </StyleProvider>
         </ConfigProvider>
     );
