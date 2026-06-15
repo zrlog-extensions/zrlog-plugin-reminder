@@ -93,6 +93,15 @@ const loadFromDocument = () => {
     }
 }
 
+const registerPluginPwa = () => {
+    if (!("serviceWorker" in navigator)) {
+        return;
+    }
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("pwa-sw.js", {scope: "./"}).catch(() => undefined);
+    });
+}
+
 const Index = () => {
     const [response, setResponse] = useState<StandardResponse<ReminderInfoResponse> | null>(loadFromDocument);
 
@@ -131,4 +140,5 @@ const Index = () => {
 
 const container = document.getElementById("app");
 const root = createRoot(container!);
+registerPluginPwa();
 root.render(<Index/>);
