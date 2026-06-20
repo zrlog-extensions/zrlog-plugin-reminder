@@ -705,7 +705,7 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
             const importantChannels = filterAvailableChannels(values.importantChannels || values.defaultChannels);
             const failedChannels = filterAvailableChannels(values.failedChannels || values.defaultChannels);
             if (defaultChannels.length === 0) {
-                throw new Error("请选择 plugin-core 中可用的通知渠道");
+                throw new Error("请选择可用的通知渠道");
             }
             const nextChannels = await request<ReminderNotificationChannelInfo>("saveNotificationChannels", {
                 defaultChannels: defaultChannels.join(","),
@@ -944,7 +944,7 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
                     <Alert
                         type="warning"
                         showIcon
-                        message="plugin-core 当前没有可用通知渠道"
+                        message="当前没有可用通知渠道"
                     />
                 )}
             </Modal>
