@@ -9,8 +9,15 @@ import com.zrlog.plugin.data.codec.MsgPacket;
 import com.zrlog.plugin.data.codec.MsgPacketStatus;
 import com.zrlog.plugin.message.NotificationChannelProvider;
 import com.zrlog.plugin.message.NotificationChannelQueryResult;
+import com.zrlog.plugin.reminder.model.ReminderActionResponse;
+import com.zrlog.plugin.reminder.model.ReminderApiResponse;
+import com.zrlog.plugin.reminder.model.ReminderCountResponse;
+import com.zrlog.plugin.reminder.model.ReminderNotificationChannelInfo;
 import com.zrlog.plugin.reminder.model.ReminderNotificationChannels;
+import com.zrlog.plugin.reminder.model.ReminderPageData;
+import com.zrlog.plugin.reminder.model.ReminderRequestParams;
 import com.zrlog.plugin.reminder.model.ReminderTask;
+import com.zrlog.plugin.reminder.model.ReminderTaskInput;
 import com.zrlog.plugin.reminder.service.ReminderNotificationSettingRepository;
 import com.zrlog.plugin.reminder.service.ReminderRepository;
 import com.zrlog.plugin.reminder.service.ReminderScheduler;
@@ -56,29 +63,24 @@ public class ReminderController {
     }
 
     public void surface() {
-        response(successMap(surfaceData()));
+        response(ReminderApiResponse.success(surfaceData()));
     }
 
     public void surfaceAction() {
-        Map<String, Object> params = params();
-        String actionRef = stringValue(params.get("actionRef"));
-        Map values = parseValues(params.get("values"));
+        ReminderRequestParams params = params();
+        String actionRef = stringValue(params.getActionRef());
+        ReminderTaskInput values = params.effectiveTask();
         String message = "操作完成";
         if ("reminder:create".equals(actionRef)) {
-            ReminderTask task = new ReminderTask();
-            task.setTitle(stringValue(values.get("title")).trim());
+            ReminderTask task = values.toTask("todo");
+            task.setTitle(stringValue(task.getTitle()).trim());
             if (!ReminderRepository.notBlank(task.getTitle())) {
-                response(errorMap("标题不能为空"));
+                response(ReminderApiResponse.error("标题不能为空"));
                 return;
             }
-            task.setNote(stringValue(values.get("note")));
-            task.setDueAt(stringValue(values.get("dueAt")));
-            task.setRepeatType(stringValue(values.get("repeatType")));
-            task.setPriority(stringValue(values.get("priority")));
-            task.setStatus("todo");
-            task.setEmailNotify(ReminderRepository.notBlank(task.getDueAt()) && !booleanValue(values.get("recordOnly")));
+            task.setEmailNotify(ReminderRepository.notBlank(task.getDueAt()) && !values.recordOnly());
             if (!validReminderTime(task)) {
-                response(errorMap(reminderTimeError(task)));
+                response(ReminderApiResponse.error(reminderTimeError(task)));
                 return;
             }
             repository.save(session, task);
@@ -89,14 +91,14 @@ public class ReminderController {
         } else if (actionRef.startsWith("reminder:complete:")) {
             ReminderTask task = repository.complete(session, actionRef.substring("reminder:complete:".length()), true);
             if (task == null) {
-                response(errorMap("任务不存在"));
+                response(ReminderApiResponse.error("任务不存在"));
                 return;
             }
             message = "已完成";
         } else if (actionRef.startsWith("reminder:reopen:")) {
             ReminderTask task = repository.complete(session, actionRef.substring("reminder:reopen:".length()), false);
             if (task == null) {
-                response(errorMap("任务不存在"));
+                response(ReminderApiResponse.error("任务不存在"));
                 return;
             }
             message = "已恢复待办";
@@ -104,47 +106,44 @@ public class ReminderController {
             repository.delete(session, actionRef.substring("reminder:delete:".length()));
             message = "已删除";
         } else {
-            response(errorMap("不支持的操作"));
+            response(ReminderApiResponse.error("不支持的操作"));
             return;
         }
-        Map<String, Object> data = new HashMap<>();
-        data.put("message", message);
-        data.put("surface", surfaceData());
-        response(successMap(data));
+        response(ReminderApiResponse.success(new ReminderActionResponse(message, surfaceData())));
     }
 
     public void list() {
-        response(successMap(repository.list(session)));
+        response(ReminderApiResponse.success(repository.list(session)));
     }
 
     public void notificationChannels() {
         try {
-            response(successMap(notificationChannelInfo()));
+            response(ReminderApiResponse.success(notificationChannelInfo()));
         } catch (Exception e) {
-            response(errorMap(e.getMessage()));
+            response(ReminderApiResponse.error(e.getMessage()));
         }
     }
 
     public void saveNotificationChannels() {
-        Map<String, Object> params = params();
+        ReminderRequestParams params = params();
         List<NotificationChannelProvider> providers;
         try {
             providers = queryNotificationProviders();
         } catch (Exception e) {
-            response(errorMap(e.getMessage()));
+            response(ReminderApiResponse.error(e.getMessage()));
             return;
         }
         Set<String> availableChannels = availableChannels(providers);
-        List<String> defaultChannels = configuredChannels(params.get("defaultChannels"), availableChannels);
+        List<String> defaultChannels = configuredChannels(params.getDefaultChannels(), availableChannels);
         if (defaultChannels.isEmpty()) {
-            response(errorMap("请选择 plugin-core 中可用的通知渠道"));
+            response(ReminderApiResponse.error("请选择 plugin-core 中可用的通知渠道"));
             return;
         }
-        List<String> importantChannels = configuredChannels(params.get("importantChannels"), availableChannels);
+        List<String> importantChannels = configuredChannels(params.getImportantChannels(), availableChannels);
         if (importantChannels.isEmpty()) {
             importantChannels = defaultChannels;
         }
-        List<String> failedChannels = configuredChannels(params.get("failedChannels"), availableChannels);
+        List<String> failedChannels = configuredChannels(params.getFailedChannels(), availableChannels);
         if (failedChannels.isEmpty()) {
             failedChannels = defaultChannels;
         }
@@ -153,70 +152,61 @@ public class ReminderController {
         channels.setImportantChannels(importantChannels);
         channels.setFailedChannels(failedChannels);
         notificationSettingRepository.save(session, channels);
-        Map<String, Object> result = new HashMap<>();
-        result.put("settings", notificationSettingRepository.get(session));
-        result.put("providers", providers);
-        response(successMap(result));
+        ReminderNotificationChannelInfo result = new ReminderNotificationChannelInfo();
+        result.setSettings(notificationSettingRepository.get(session));
+        result.setProviders(providers);
+        response(ReminderApiResponse.success(result));
     }
 
     public void save() {
-        Map<String, Object> params = params();
-        String title = stringValue(params.get("title"));
+        ReminderTaskInput input = params().effectiveTask();
+        String title = stringValue(input.getTitle());
         if (!ReminderRepository.notBlank(title)) {
-            response(errorMap("标题不能为空"));
+            response(ReminderApiResponse.error("标题不能为空"));
             return;
         }
-        ReminderTask task = new ReminderTask();
-        task.setId(stringValue(params.get("id")));
+        ReminderTask task = input.toTask("todo");
         task.setTitle(title.trim());
-        task.setNote(stringValue(params.get("note")));
-        task.setDueAt(stringValue(params.get("dueAt")));
-        task.setRepeatType(stringValue(params.get("repeatType")));
-        task.setPriority(stringValue(params.get("priority")));
-        task.setStatus(stringValue(params.get("status")));
-        task.setEmailNotify(booleanValue(params.get("emailNotify")));
         if (!validReminderTime(task)) {
-            response(errorMap(reminderTimeError(task)));
+            response(ReminderApiResponse.error(reminderTimeError(task)));
             return;
         }
-        response(successMap(repository.save(session, task)));
+        response(ReminderApiResponse.success(repository.save(session, task)));
     }
 
     public void complete() {
-        Map<String, Object> params = params();
-        ReminderTask task = repository.complete(session, stringValue(params.get("id")), booleanValue(params.get("done")));
+        ReminderTaskInput input = params().effectiveTask();
+        ReminderTask task = repository.complete(session, stringValue(input.getId()), input.done());
         if (task == null) {
-            response(errorMap("任务不存在"));
+            response(ReminderApiResponse.error("任务不存在"));
             return;
         }
-        response(successMap(task));
+        response(ReminderApiResponse.success(task));
     }
 
     public void remove() {
-        response(successMap(repository.delete(session, stringValue(params().get("id")))));
+        response(ReminderApiResponse.success(repository.delete(session, stringValue(params().effectiveTask().getId()))));
     }
 
     public void remindNow() {
         int count = ReminderScheduler.remindDueTasks(session);
-        Map<String, Object> data = new HashMap<>();
-        data.put("count", count);
-        response(successMap(data));
+        response(ReminderApiResponse.success(new ReminderCountResponse(count)));
     }
 
-    private Map<String, Object> pageData() {
-        Map<String, Object> data = new HashMap<>();
-        data.put("dark", isDarkMode());
-        data.put("adminColorPrimary", getAdminColorPrimary());
-        data.put("plugin", session.getPlugin());
-        data.put("tasks", repository.list(session));
-        data.put("notificationChannels", notificationSettingRepository.get(session));
-        return successMap(data);
+    private ReminderApiResponse<ReminderPageData> pageData() {
+        ReminderPageData data = new ReminderPageData();
+        data.setDark(isDarkMode());
+        data.setAdminColorPrimary(getAdminColorPrimary());
+        data.setPlugin(session.getPlugin());
+        data.setTasks(repository.list(session));
+        data.setNotificationChannels(notificationSettingRepository.get(session));
+        return ReminderApiResponse.success(data);
     }
 
-    private Map<String, Object> notificationChannelInfo() {
-        Map<String, Object> data = new HashMap<>();
-        data.put("settings", notificationSettingRepository.get(session));
-        data.put("providers", queryNotificationProviders());
+    private ReminderNotificationChannelInfo notificationChannelInfo() {
+        ReminderNotificationChannelInfo data = new ReminderNotificationChannelInfo();
+        data.setSettings(notificationSettingRepository.get(session));
+        data.setProviders(queryNotificationProviders());
         return data;
     }
 
@@ -486,49 +476,27 @@ public class ReminderController {
         return "";
     }
 
-    private Map<String, Object> params() {
+    private ReminderRequestParams params() {
         if (requestInfo.getRequestBody() != null && requestInfo.getRequestBody().length > 0) {
             String body = new String(requestInfo.getRequestBody(), StandardCharsets.UTF_8);
             if (body.trim().startsWith("{")) {
-                return gson.fromJson(body, Map.class);
+                ReminderRequestParams params = gson.fromJson(body, ReminderRequestParams.class);
+                return params == null ? new ReminderRequestParams() : params;
             }
         }
-        if (requestInfo.getParam() == null) {
-            return new HashMap<>();
-        }
-        return requestInfo.simpleParam();
+        return ReminderRequestParams.fromParams(this::paramObject, gson);
     }
 
-    private Map parseValues(Object values) {
-        if (values == null) {
-            return new HashMap();
+    private Object paramObject(String key) {
+        if (requestInfo.getParam() == null || requestInfo.getParam().get(key) == null || requestInfo.getParam().get(key).length == 0) {
+            return null;
         }
-        if (values instanceof Map) {
-            return (Map) values;
-        }
-        String text = stringValue(values);
-        if (!ReminderRepository.notBlank(text)) {
-            return new HashMap();
-        }
-        return gson.fromJson(text, Map.class);
+        String[] values = requestInfo.getParam().get(key);
+        return values.length == 1 ? values[0] : values;
     }
 
-    private Map<String, Object> successMap(Object data) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("success", true);
-        map.put("data", data);
-        return map;
-    }
-
-    private Map<String, Object> errorMap(String message) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("success", false);
-        map.put("message", message);
-        return map;
-    }
-
-    private void response(Map<String, Object> map) {
-        session.sendMsg(ContentType.JSON, map, requestPacket.getMethodStr(), requestPacket.getMsgId(), MsgPacketStatus.RESPONSE_SUCCESS);
+    private void response(ReminderApiResponse<?> response) {
+        session.sendMsg(ContentType.JSON, response, requestPacket.getMethodStr(), requestPacket.getMsgId(), MsgPacketStatus.RESPONSE_SUCCESS);
     }
 
     private String stringValue(Object value) {
@@ -541,18 +509,10 @@ public class ReminderController {
         return String.valueOf(value);
     }
 
-    private boolean booleanValue(Object value) {
-        if (value == null) {
-            return false;
-        }
-        if (value instanceof Boolean) {
-            return (Boolean) value;
-        }
-        String text = stringValue(value);
-        return "true".equalsIgnoreCase(text) || "on".equalsIgnoreCase(text) || "1".equals(text);
-    }
-
     private List<String> channelList(Object value) {
+        if (value instanceof String[]) {
+            return Arrays.asList((String[]) value);
+        }
         if (value instanceof List) {
             List<String> result = new ArrayList<>();
             for (Object item : (List) value) {

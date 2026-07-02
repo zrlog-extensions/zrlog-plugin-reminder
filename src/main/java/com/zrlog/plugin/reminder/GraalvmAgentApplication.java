@@ -5,9 +5,18 @@ import com.zrlog.plugin.common.LoggerUtil;
 import com.zrlog.plugin.type.RunType;
 import com.zrlog.plugin.common.PluginNativeImageUtils;
 import com.zrlog.plugin.reminder.controller.ReminderController;
+import com.zrlog.plugin.reminder.model.ReminderActionResponse;
+import com.zrlog.plugin.reminder.model.ReminderApiResponse;
+import com.zrlog.plugin.reminder.model.ReminderCountResponse;
+import com.zrlog.plugin.reminder.model.ReminderNotificationChannelInfo;
 import com.zrlog.plugin.reminder.model.ReminderNotificationChannels;
+import com.zrlog.plugin.reminder.model.ReminderNotificationSettingValues;
+import com.zrlog.plugin.reminder.model.ReminderPageData;
+import com.zrlog.plugin.reminder.model.ReminderRequestParams;
 import com.zrlog.plugin.reminder.model.ReminderStore;
 import com.zrlog.plugin.reminder.model.ReminderTask;
+import com.zrlog.plugin.reminder.model.ReminderTaskInput;
+import com.zrlog.plugin.reminder.model.WebsiteKeyRequest;
 import com.zrlog.plugin.reminder.service.ReminderCapabilityService;
 
 import java.io.File;
@@ -24,8 +33,11 @@ public class GraalvmAgentApplication {
     public static void main(String[] args) throws IOException {
         RunConstants.runType = RunType.AGENT;
         PluginNativeImageUtils.usedGsonObject();
-        PluginNativeImageUtils.gsonNativeAgentByClazz(Arrays.asList(ReminderStore.class, ReminderTask.class,
-                ReminderNotificationChannels.class));
+        PluginNativeImageUtils.gsonNativeAgentByClazz(Arrays.asList(WebsiteKeyRequest.class,
+                ReminderActionResponse.class, ReminderApiResponse.class, ReminderCountResponse.class,
+                ReminderNotificationChannelInfo.class, ReminderNotificationChannels.class,
+                ReminderNotificationSettingValues.class, ReminderPageData.class, ReminderRequestParams.class,
+                ReminderStore.class, ReminderTask.class, ReminderTaskInput.class));
         warmupServiceReflection();
         String basePath = System.getProperty("user.dir").replace("\\target", "").replace("/target", "");
         File file = new File(basePath + "/src/main/resources");

@@ -4,6 +4,10 @@ import com.zrlog.plugin.IOSession;
 import com.zrlog.plugin.common.LoggerUtil;
 import com.zrlog.plugin.common.SessionKvRepository;
 import com.zrlog.plugin.reminder.model.ReminderNotificationChannels;
+import com.zrlog.plugin.reminder.model.ReminderNotificationSettingValues;
+import com.zrlog.plugin.reminder.model.WebsiteKeyRequest;
+import com.zrlog.plugin.data.codec.ContentType;
+import com.zrlog.plugin.type.ActionType;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -21,18 +25,22 @@ public class ReminderNotificationSettingRepository {
 
     public ReminderNotificationChannels get(IOSession session) {
         try {
-            Map<String, Object> values = SessionKvRepository.of(session).read(
-                    ReminderNotificationChannels.DEFAULT_CHANNELS_KEY,
-                    ReminderNotificationChannels.IMPORTANT_CHANNELS_KEY,
-                    ReminderNotificationChannels.FAILED_CHANNELS_KEY);
+            ReminderNotificationSettingValues values = session.getResponseSync(ContentType.JSON,
+                    WebsiteKeyRequest.of(ReminderNotificationChannels.DEFAULT_CHANNELS_KEY + ","
+                            + ReminderNotificationChannels.IMPORTANT_CHANNELS_KEY + ","
+                            + ReminderNotificationChannels.FAILED_CHANNELS_KEY),
+                    ActionType.GET_WEBSITE, ReminderNotificationSettingValues.class);
+            if (values == null) {
+                values = new ReminderNotificationSettingValues();
+            }
             ReminderNotificationChannels channels = new ReminderNotificationChannels();
             channels.setDefaultChannels(ReminderNotificationChannels.decodeChannels(
-                    stringValue(values.get(ReminderNotificationChannels.DEFAULT_CHANNELS_KEY)), null));
+                    values.getNotificationDefaultChannels(), null));
             channels.setImportantChannels(ReminderNotificationChannels.decodeChannels(
-                    stringValue(values.get(ReminderNotificationChannels.IMPORTANT_CHANNELS_KEY)),
+                    values.getNotificationImportantChannels(),
                     channels.getDefaultChannels()));
             channels.setFailedChannels(ReminderNotificationChannels.decodeChannels(
-                    stringValue(values.get(ReminderNotificationChannels.FAILED_CHANNELS_KEY)),
+                    values.getNotificationFailedChannels(),
                     channels.getDefaultChannels()));
             return ReminderNotificationChannels.normalize(channels);
         } catch (Exception e) {
@@ -53,7 +61,4 @@ public class ReminderNotificationSettingRepository {
         SessionKvRepository.of(session).write(values);
     }
 
-    private String stringValue(Object value) {
-        return value == null ? "" : String.valueOf(value);
-    }
 }
