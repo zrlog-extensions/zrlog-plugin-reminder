@@ -54,6 +54,7 @@ public class ReminderController {
     public void index() {
         Map<String, Object> data = new HashMap<>();
         data.put("theme", isDarkMode() ? "dark" : "light");
+        data.put("themeColor", htmlAttributeValue(getAdminColorPrimary()));
         data.put("data", gson.toJson(pageData()));
         session.responseHtml("/templates/index", data, requestPacket.getMethodStr(), requestPacket.getMsgId());
     }
@@ -507,6 +508,14 @@ public class ReminderController {
             return String.valueOf(((List) value).get(0));
         }
         return String.valueOf(value);
+    }
+
+    private String htmlAttributeValue(String value) {
+        return stringValue(value)
+                .replace("&", "&amp;")
+                .replace("\"", "&quot;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
     }
 
     private List<String> channelList(Object value) {
