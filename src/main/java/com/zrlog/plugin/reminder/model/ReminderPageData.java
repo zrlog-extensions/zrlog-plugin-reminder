@@ -1,8 +1,12 @@
 package com.zrlog.plugin.reminder.model;
 
+import com.zrlog.plugin.data.codec.PluginAppearance;
+
 import com.zrlog.plugin.message.Plugin;
 
 public class ReminderPageData {
+
+    private PluginAppearance appearance;
 
     private boolean dark;
     private String adminColorPrimary;
@@ -48,5 +52,8 @@ public class ReminderPageData {
 
     public void setNotificationChannels(ReminderNotificationChannels notificationChannels) {
         this.notificationChannels = notificationChannels;
+    }
+    public void setAppearance(PluginAppearance appearance) {
+        this.appearance = appearance;
     }
 }

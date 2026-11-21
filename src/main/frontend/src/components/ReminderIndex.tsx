@@ -1,20 +1,20 @@
+import Input from "@zrlog/ui/antd/Input";
+import Popconfirm from "@zrlog/ui/antd/Popconfirm";
+import Switch from "@zrlog/ui/antd/Switch";
+import Tag from "@zrlog/ui/antd/Tag";
+import {useUiApp} from "@zrlog/ui/feedback";
+import SettingOutlined from "@zrlog/ui/icons/settings";
 import {
     Alert,
     Button,
     Checkbox,
     Form,
     Grid,
-    Input,
     Modal,
-    Popconfirm,
     Segmented,
     Select,
     Space,
-    Switch,
-    Tag,
-    message,
 } from "antd";
-import {SettingOutlined} from "@ant-design/icons";
 import axios from "axios";
 import {FunctionComponent, useMemo, useState} from "react";
 import styled from "styled-components";
@@ -588,7 +588,7 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
     const [notificationProviders, setNotificationProviders] = useState<NotificationProviderRow[]>([]);
     const [form] = Form.useForm<ReminderFormValues>();
     const [channelForm] = Form.useForm<NotificationChannelFormValues>();
-    const [messageApi, contextHolder] = message.useMessage();
+    const {message: messageApi} = useUiApp();
     const reminderTimeOptions = useMemo(() => buildReminderTimeOptions(), [modalOpen]);
 
     const openTasks = useMemo(() => tasks.filter(task => task.status !== "done"), [tasks]);
@@ -779,7 +779,6 @@ const ReminderIndex: FunctionComponent<ReminderIndexProps> = ({data}) => {
 
     return (
         <Shell>
-            {contextHolder}
             <TopBar>
                 <div>
                     <Title>待办提醒</Title>

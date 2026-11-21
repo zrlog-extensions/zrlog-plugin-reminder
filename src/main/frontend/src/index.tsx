@@ -1,13 +1,9 @@
-import {legacyLogicalPropertiesTransformer, StyleProvider} from "@ant-design/cssinjs";
-import {App, ConfigProvider, Layout, theme} from "antd";
-import zhCN from "antd/es/locale/zh_CN";
 import {useEffect, useState} from "react";
 import {createRoot} from "react-dom/client";
 import axios from "axios";
 import AppBase from "./AppBase";
-
-const {darkAlgorithm, defaultAlgorithm} = theme;
-const {Content} = Layout;
+import {PluginThemeProvider} from "./PluginThemeProvider";
+import type {PluginAppearance} from "./PluginThemeProvider";
 
 export type ReminderPriority = "high" | "normal" | "low";
 export type ReminderStatus = "todo" | "done";
@@ -67,7 +63,7 @@ export interface Plugin {
     dependentService: string[];
 }
 
-export interface ReminderInfoResponse {
+export interface ReminderInfoResponse extends PluginAppearance {
     dark: boolean;
     adminColorPrimary?: string;
     plugin: Plugin;
@@ -118,23 +114,9 @@ const Index = () => {
     }
 
     return (
-        <ConfigProvider
-            locale={zhCN}
-            theme={{
-                algorithm: response.data.dark ? darkAlgorithm : defaultAlgorithm,
-                token: response.data.adminColorPrimary ? {
-                    colorPrimary: response.data.adminColorPrimary,
-                } : undefined,
-            }}
-        >
-            <StyleProvider transformers={[legacyLogicalPropertiesTransformer]}>
-                <Content style={{minHeight: "100vh", backgroundColor: response.data.dark ? "#141414" : undefined, color: response.data.dark ? "#dfdfdf" : undefined}}>
-                    <App>
-                        <AppBase pluginInfo={response.data}/>
-                    </App>
-                </Content>
-            </StyleProvider>
-        </ConfigProvider>
+        <PluginThemeProvider page={response.data}>
+            <AppBase pluginInfo={response.data}/>
+        </PluginThemeProvider>
     );
 };
 
